@@ -15,6 +15,8 @@ def auth_yubico(yubikey):
     if len(yubikey) != 44:
         return False, None
 
+    yubikey = yubikey.lower()
+
     public_id = yubikey[:12]
 
     client = yubico_client.Yubico(
@@ -32,11 +34,11 @@ def auth_yubico(yubikey):
         return False, None
 
     yubikey_hash = hashlib.sha512()
-    yubikey_hash.update(yubikey)
-    yubikey_hash = base64.b64encode(yubikey_hash.digest())
+    yubikey_hash.update(yubikey.encode())
+    yubikey_hash = base64.b64encode(yubikey_hash.digest()).decode()
 
     try:
-        yubikey_collection.insert({
+        yubikey_collection.insert_one({
             '_id': yubikey_hash,
             'timestamp': utils.now(),
         })

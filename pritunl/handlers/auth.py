@@ -10,11 +10,14 @@ from pritunl import sso
 from pritunl import logger
 from pritunl import journal
 from pritunl import limiter
+from pritunl import database
 
 import flask
 import time
 import random
-import hashlib
+import json
+import base64
+import nacl.secret
 
 def _auth_radius(username, password, remote_addr):
     sso_mode = settings.app.sso
@@ -46,7 +49,7 @@ def _auth_radius(username, password, remote_addr):
                 not_found = True
 
         if not_found:
-            logger.warning('Supplied org names do not exists',
+            logger.warning('Supplied org names do not exist',
                 'sso',
                 sso_type='radius',
                 user_name=username,
@@ -58,6 +61,7 @@ def _auth_radius(username, password, remote_addr):
         user_name=username,
         user_email=None,
         remote_ip=utils.get_remote_addr(),
+        sso_org_names=org_names,
     )
     if valid:
         org_id = org_id_new or org_id
@@ -149,6 +153,9 @@ def _auth_radius(username, password, remote_addr):
 
     org = organization.get_by_id(org_id)
     if not org:
+        logger.error('Organization for sso does not exist', 'auth',
+            org_id=org_id,
+        )
         return flask.abort(405)
 
     usr = org.find_user(name=username)
@@ -193,7 +200,7 @@ def _auth_radius(username, password, remote_addr):
     journal.entry(
         journal.SSO_AUTH_SUCCESS,
         usr.journal_data,
-        key_id_hash=hashlib.md5(key_link['id']).hexdigest(),
+        key_id_hash=utils.unsafe_md5(key_link['id'].encode()).hexdigest(),
         remote_address=remote_addr,
     )
 
@@ -274,6 +281,9 @@ def _auth_plugin(username, password, remote_addr):
 
     org = organization.get_by_id(org_id)
     if not org:
+        logger.error('Organization for sso does not exist', 'auth',
+            org_id=org_id,
+        )
         return flask.abort(405)
 
     usr = org.find_user(name=username)
@@ -334,7 +344,7 @@ def _auth_plugin(username, password, remote_addr):
 @auth.open_auth
 def auth_session_post():
     username = utils.json_filter_str('username')[:128]
-    password = utils.json_str('password')
+    password = flask.request.json['password']
     if password:
         password = password[:128]
     otp_code = utils.json_opt_filter_str('otp_code')
@@ -400,10 +410,18 @@ def auth_session_post():
 
     utils.set_flask_sig()
 
+    timestamp = int(utils.time_now())
+    cipher_data = json.dumps({
+        'id': str(admin.id),
+        'ttl': timestamp + settings.app.session_timeout,
+    })
+    nacl_box = nacl.secret.SecretBox(settings.local.web_secret)
+    token = nacl_box.encrypt(cipher_data.encode())
+
     return utils.jsonify({
         'authenticated': True,
         'default': admin.default or False,
-    })
+    }, token=base64.urlsafe_b64encode(token).decode())
 
 @app.app.route('/auth/session', methods=['DELETE'])
 @auth.open_auth
@@ -424,7 +442,7 @@ def auth_delete():
     )
 
     if admin_id and session_id:
-        admin_id = utils.ObjectId(admin_id)
+        admin_id = database.ParseObjectId(admin_id)
         auth.clear_session(admin_id, str(session_id))
     flask.session.clear()
 
@@ -439,6 +457,7 @@ def auth_state_get():
         'super_user': flask.g.administrator.super_user,
         'csrf_token': auth.get_token(flask.g.administrator.id),
         'theme': settings.app.theme,
+        'user': settings.local.sub_url_key,
         'active': settings.local.sub_active,
         'plan': settings.local.sub_plan,
         'version': settings.local.version_int,

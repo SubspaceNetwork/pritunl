@@ -1,4 +1,5 @@
 from pritunl.exceptions import *
+from pritunl.constants import *
 from pritunl.helpers import *
 from pritunl import logger
 from pritunl import journal
@@ -10,12 +11,12 @@ from pritunl import acme
 
 import threading
 import flask
-import logging
-import logging.handlers
 import time
 import subprocess
 import os
+import base64
 import cheroot.wsgi
+import ssl
 
 app = flask.Flask(__name__)
 app_server = None
@@ -25,6 +26,7 @@ _cur_key = None
 _cur_port = None
 _cur_redirect_server = None
 _cur_reverse_proxy = None
+_cur_admin_api = None
 _update_lock = threading.Lock()
 _watch_event = threading.Event()
 
@@ -35,11 +37,21 @@ def update_server(delay=0):
     global _cur_port
     global _cur_redirect_server
     global _cur_reverse_proxy
+    global _cur_admin_api
 
     if not settings.local.server_ready.is_set():
         return
 
     _update_lock.acquire()
+    if settings.local.web_state == DISABLED:
+        logger.warning(
+            'Web server disabled',
+            'server',
+            message=settings.local.notification,
+        )
+        stop_server()
+        return
+
     try:
         if _cur_ssl != settings.app.server_ssl or \
                 _cur_cert != settings.app.server_cert or \
@@ -47,7 +59,8 @@ def update_server(delay=0):
                 _cur_port != settings.app.server_port or \
                 _cur_redirect_server != settings.app.redirect_server or \
                 _cur_reverse_proxy != (settings.app.reverse_proxy_header if
-                    settings.app.reverse_proxy else ''):
+                    settings.app.reverse_proxy else '') or \
+                _cur_admin_api != settings.local.admin_api:
             logger.info('Settings changed, restarting server...', 'app',
                 ssl_changed=_cur_ssl != settings.app.server_ssl,
                 cert_changed=_cur_cert != settings.app.server_cert,
@@ -58,6 +71,8 @@ def update_server(delay=0):
                 reverse_proxy_changed= _cur_reverse_proxy != (
                     settings.app.reverse_proxy_header if
                     settings.app.reverse_proxy else ''),
+                admin_api_auth_changed= _cur_admin_api != \
+                    settings.local.admin_api,
             )
 
             _cur_ssl = settings.app.server_ssl
@@ -67,11 +82,25 @@ def update_server(delay=0):
             _cur_redirect_server = settings.app.redirect_server
             _cur_reverse_proxy = settings.app.reverse_proxy_header if \
                 settings.app.reverse_proxy else ''
+            _cur_admin_api = settings.local.admin_api
 
             if settings.app.server_auto_restart:
                 restart_server(delay=delay)
     finally:
         _update_lock.release()
+
+def stop_server(delay=0):
+    _watch_event.clear()
+    def thread_func():
+        time.sleep(delay)
+        set_app_server_interrupt()
+        if app_server:
+            app_server.interrupt = ServerStop('Stop')
+        time.sleep(1)
+        clear_app_server_interrupt()
+    thread = threading.Thread(name="StopServer", target=thread_func)
+    thread.daemon = True
+    thread.start()
 
 def restart_server(delay=0):
     _watch_event.clear()
@@ -82,7 +111,7 @@ def restart_server(delay=0):
             app_server.interrupt = ServerRestart('Restart')
         time.sleep(1)
         clear_app_server_interrupt()
-    thread = threading.Thread(target=thread_func)
+    thread = threading.Thread(name="RestartServer", target=thread_func)
     thread.daemon = True
     thread.start()
 
@@ -101,19 +130,24 @@ def before_request():
 
 @app.after_request
 def after_request(response):
-    if settings.app.check_requests and not flask.g.valid:
+    if not flask.g.valid:
         raise ValueError('Request not authorized')
 
     response.headers.add('X-Frame-Options', 'DENY')
+    response.headers.add('X-XSS-Protection', '1; mode=block')
+    response.headers.add('X-Content-Type-Options', 'nosniff')
+    response.headers.add('X-Robots-Tag', 'noindex')
 
     if settings.app.server_ssl or settings.app.reverse_proxy:
-        response.headers.add('Strict-Transport-Security', 'max-age=31536000')
+        response.headers.add(
+            'Strict-Transport-Security',
+            'max-age=31536000; includeSubDomains')
 
     if not flask.request.path.startswith('/event'):
         monitoring.insert_point('requests', {
             'host': settings.local.host.name,
         }, {
-            'path': flask.request.path,
+            'path': utils.filter_path(flask.request.path),
             'remote_ip': utils.get_remote_addr(),
             'response_time': int((time.time() - flask.g.start) * 1000),
         })
@@ -132,22 +166,39 @@ def acme_token_get(token):
 def _run_server(restart):
     global app_server
 
+    systemd = settings.app.web_systemd
+    if systemd and not utils.systemd_available():
+        logger.info('Systemd not available, skipping web service', 'app')
+        systemd = False
+
     try:
         context = subprocess.check_output(
             ['id', '-Z'],
             stderr=subprocess.PIPE,
-        ).strip()
+        ).decode().strip()
     except:
         context = 'none'
 
     journal.entry(
         journal.WEB_SERVER_START,
         selinux_context=context,
+        ssl_version=ssl.OPENSSL_VERSION,
     )
+
+    webStrict = not settings.local.admin_api
 
     logger.info('Starting server', 'app',
         selinux_context=context,
+        ssl_version=ssl.OPENSSL_VERSION,
+        web_auth_strict=webStrict,
     )
+
+    if not webStrict:
+        logger.warning(
+            'Server has administrator API keys configured, ' +
+                'disabling strict external web authentication',
+            'app',
+        )
 
     app_server = cheroot.wsgi.Server(
         ('localhost', settings.app.server_internal_port),
@@ -160,8 +211,8 @@ def _run_server(restart):
     )
     app_server.server_name = ''
 
-    server_cert_path = None
-    server_key_path = None
+    server_cert = None
+    server_key = None
     redirect_server = 'true' if settings.app.redirect_server else 'false'
     internal_addr = 'localhost:%s' % settings.app.server_internal_port
 
@@ -173,50 +224,87 @@ def _run_server(restart):
     if settings.app.server_ssl:
         setup_server_cert()
 
-        server_cert_path, server_key_path = utils.write_server_cert(
-            settings.app.server_cert,
-            settings.app.server_key,
-            settings.app.acme_domain,
-        )
+        server_cert = base64.b64encode(
+            settings.app.server_cert.encode()).decode()
+        server_key = base64.b64encode(
+            settings.app.server_key.encode()).decode()
 
     if not restart:
         settings.local.server_ready.set()
         settings.local.server_start.wait()
 
-    process_state = True
-    process = subprocess.Popen(
-        ['pritunl-web'],
-        env=dict(os.environ, **{
-            'REVERSE_PROXY_HEADER': settings.app.reverse_proxy_header if \
-                settings.app.reverse_proxy else '',
-            'REVERSE_PROXY_PROTO_HEADER': \
-                settings.app.reverse_proxy_proto_header if \
-                settings.app.reverse_proxy else '',
-            'REDIRECT_SERVER': redirect_server,
-            'BIND_HOST': settings.conf.bind_addr,
-            'BIND_PORT': str(settings.app.server_port),
-            'INTERNAL_ADDRESS': internal_addr,
-            'CERT_PATH': server_cert_path or '',
-            'KEY_PATH': server_key_path or '',
-        }),
-    )
+    if systemd:
+        with open(SYSTEMD_WEB_ENV_PATH, 'w') as systemd_env_file:
+            os.chmod(SYSTEMD_WEB_ENV_PATH, 0o600)
+            systemd_env_file.write(WEB_SYSTEMD_ENV_TEMPLATE % (
+                settings.app.reverse_proxy_header if
+                    settings.app.reverse_proxy else '',
+                settings.app.reverse_proxy_proto_header if
+                    settings.app.reverse_proxy else '',
+                redirect_server,
+                settings.conf.bind_addr,
+                str(settings.app.server_port),
+                internal_addr,
+                server_cert or '',
+                server_key or '',
+                'true' if webStrict else 'false',
+                settings.app.cookie_web_secret,
+            ))
 
-    def poll_thread():
-        time.sleep(0.5)
-        if process.wait() and process_state:
-            time.sleep(0.25)
-            if not check_global_interrupt():
-                stdout, stderr = process._communicate(None)
-                logger.error('Web server process exited unexpectedly', 'app',
-                    stdout=stdout,
-                    stderr=stderr,
-                )
+        utils.systemd_start(SYSTEMD_WEB_SERVICE)
+
+        def poll_thread():
+            while True:
                 time.sleep(1)
-                restart_server(1)
 
-    thread = threading.Thread(target=poll_thread)
-    thread.daemon = True
-    thread.start()
+                if utils.systemd_is_active(SYSTEMD_WEB_SERVICE):
+                    continue
+
+                if not check_global_interrupt():
+                    logger.error('Web server process exited unexpectedly',
+                        'app')
+                    time.sleep(1)
+                    restart_server(1)
+
+                break
+
+        thread = threading.Thread(name="AppPollThreadS", target=poll_thread)
+        thread.daemon = True
+        thread.start()
+    else:
+        process_state = True
+        process = subprocess.Popen(
+            ['pritunl-web'],
+            env=dict(os.environ, **{
+                'REVERSE_PROXY_HEADER': settings.app.reverse_proxy_header if \
+                    settings.app.reverse_proxy else '',
+                'REVERSE_PROXY_PROTO_HEADER': \
+                    settings.app.reverse_proxy_proto_header if \
+                    settings.app.reverse_proxy else '',
+                'REDIRECT_SERVER': redirect_server,
+                'BIND_HOST': settings.conf.bind_addr,
+                'BIND_PORT': str(settings.app.server_port),
+                'INTERNAL_ADDRESS': internal_addr,
+                'SSL_CERT': server_cert or '',
+                'SSL_KEY': server_key or '',
+                'WEB_STRICT': 'true' if webStrict else 'false',
+                'WEB_SECRET': settings.app.cookie_web_secret,
+            }),
+        )
+
+        def poll_thread():
+            time.sleep(0.5)
+            if process.wait() and process_state:
+                time.sleep(0.25)
+                if not check_global_interrupt():
+                    logger.error('Web server process exited unexpectedly',
+                        'app')
+                    time.sleep(1)
+                    restart_server(1)
+
+        thread = threading.Thread(name="AppPollThreadP", target=poll_thread)
+        thread.daemon = True
+        thread.start()
 
     _watch_event.set()
 
@@ -226,13 +314,18 @@ def _run_server(restart):
         return
     except ServerRestart:
         raise
+    except ServerStop:
+        return
     except:
         logger.exception('Server error occurred', 'app')
         raise
     finally:
         process_state = False
         try:
-            process.kill()
+            if systemd:
+                utils.systemd_stop(SYSTEMD_WEB_SERVICE)
+            else:
+                process.kill()
         except:
             pass
 
@@ -240,6 +333,9 @@ def _run_wsgi():
     restart = False
     while True:
         try:
+            if settings.local.web_state == DISABLED:
+                time.sleep(1)
+                continue
             _run_server(restart)
         except ServerRestart:
             restart = True
@@ -258,12 +354,15 @@ def setup_server_cert():
         _cur_key = settings.app.server_key
 
 def run_server():
+    settings.local.admin_api = auth.admin_api_count() > 0
+
     global _cur_ssl
     global _cur_cert
     global _cur_key
     global _cur_port
     global _cur_redirect_server
     global _cur_reverse_proxy
+    global _cur_admin_api
     _cur_ssl = settings.app.server_ssl
     _cur_cert = settings.app.server_cert
     _cur_key = settings.app.server_key
@@ -271,6 +370,7 @@ def run_server():
     _cur_redirect_server = settings.app.redirect_server
     _cur_reverse_proxy = settings.app.reverse_proxy_header if \
         settings.app.reverse_proxy else ''
+    _cur_admin_api = settings.local.admin_api
 
     logger.LogEntry(message='Web server started.')
 

@@ -2,6 +2,7 @@ from pritunl.helpers import *
 from pritunl import settings
 from pritunl import utils
 from pritunl import logger
+from pritunl import database
 
 import time
 import json
@@ -27,6 +28,7 @@ def init():
 
     _client = redis.StrictRedis.from_url(
         redis_uri,
+        decode_responses=True,
         socket_timeout=settings.app.redis_timeout,
         socket_connect_timeout=settings.app.redis_timeout,
     )
@@ -79,12 +81,12 @@ def publish(channels, message, extra=None, cap=50, ttl=300):
 
     for channel in channels:
         doc = {
-            '_id': utils.ObjectId(),
+            '_id': database.ObjectId(),
             'message': message,
             'timestamp': utils.now(),
         }
         if extra:
-            for key, val in extra.items():
+            for key, val in list(extra.items()):
                 doc[key] = val
 
         doc = json.dumps(doc, default=utils.json_default)

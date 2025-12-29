@@ -1,6 +1,6 @@
 <div class="form-group name">
   <label>Name</label>
-  <input type="text" class="form-control" placeholder="Enter name" data-toggle="tooltip" title="Name of user" autofocus>
+  <input type="text" class="form-control" placeholder="Enter name" data-toggle="tooltip" title="Name of user" autocomplete="off" autofocus>
 </div>
 <div class="form-group org">
   <label>Select an organization</label>
@@ -18,15 +18,15 @@
 </div>
 <div class="form-group email">
   <label>Email (optional)</label>
-  <input type="email" class="form-control" placeholder="Enter email address" data-toggle="tooltip" title="User email address">
+  <input type="email" class="form-control" placeholder="Enter email address" data-toggle="tooltip" title="User email address" autocomplete="off">
 </div>
 <div class="form-group pin">
   <label>Pin</label>
-  <input type="password" class="form-control" placeholder="Enter user pin" data-toggle="tooltip" title="User pin, required when user connects to vpn. When using with two-factor authentication the pin and two-factor authentication code should both be placed in the password field.">
+  <input type="password" class="form-control" placeholder="Enter user pin" data-toggle="tooltip" title="User pin, required when user connects to vpn. When using with two-factor authentication the pin and two-factor authentication code should both be placed in the password field." autocomplete="new-password">
 </div>
-<div class="form-group yubikey-id" style="display: none">
+<div class="form-group yubikey-id">
   <label>YubiKey ID</label>
-  <input type="text" class="form-control" maxlength="12" placeholder="Insert YubiKey" data-toggle="tooltip" title="Insert and touch YubiKey to get ID. Requires Yubico API credentials in settings.">
+  <input type="text" class="form-control" maxlength="12" placeholder="Insert YubiKey" data-toggle="tooltip" title="Insert and touch YubiKey to get ID. Requires Yubico API credentials in settings." autocomplete="off">
 </div>
 <div class="form-group port-forwarding">
   <label>Port Forwarding</label>
@@ -53,13 +53,15 @@
     <select class="form-control" data-toggle="tooltip" title="User authentication type. This will determine how the user authenticates. This should be set automatically when the user authenticates with single sign-on.">
       <option value="local" selected>Local</option>
       <option value="duo">Duo</option>
-      <option value="yubico">Yubico</option>
       <option value="azure">Azure</option>
       <option value="azure_duo">Azure + Duo</option>
       <option value="azure_yubico">Azure + Yubico</option>
       <option value="google">Google</option>
       <option value="google_duo">Google + Duo</option>
       <option value="google_yubico">Google + Yubico</option>
+      <option value="authzero">Auth0</option>
+      <option value="authzero_duo">Auth0 + Duo</option>
+      <option value="authzero_yubico">Auth0 + Yubico</option>
       <option value="slack">Slack</option>
       <option value="slack_duo">Slack + Duo</option>
       <option value="slack_yubico">Slack + Yubico</option>
@@ -68,14 +70,23 @@
       <option value="saml_yubico">SAML + Yubico</option>
       <option value="saml_okta">Okta</option>
       <option value="saml_okta_duo">Okta + Duo</option>
-      <option value="saml_okta_yubico">Okta Yubico</option>
+      <option value="saml_okta_yubico">Okta + Yubico</option>
       <option value="saml_onelogin">OneLogin</option>
-      <option value="saml_onelogin_duo">OneLogin Duo</option>
-      <option value="saml_onelogin_yubico">OneLogin Yubico</option>
+      <option value="saml_onelogin_duo">OneLogin + Duo</option>
+      <option value="saml_onelogin_yubico">OneLogin + Yubico</option>
+      <option value="saml_jumpcloud">JumpCloud</option>
+      <option value="saml_jumpcloud_duo">JumpCloud + Duo</option>
+      <option value="saml_jumpcloud_yubico">JumpCloud + Yubico</option>
       <option value="radius">Radius</option>
       <option value="radius_duo">Radius + Duo</option>
       <option value="plugin">Plugin</option>
     </select>
+  </div>
+  <div class="form-group mac-addresses">
+    <label>Allowed MAC Addresses</label>
+    <input type="text" class="form-control"
+           placeholder="Enter MAC address" data-toggle="tooltip"
+           title="Comma separated list of MAC addresses client is allowed to connect from. The validity of the MAC address provided by the VPN client cannot be verified.">
   </div>
   <div class="form-group dns-servers">
     <label>DNS Forwarding Server</label>

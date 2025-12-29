@@ -1,6 +1,7 @@
 from pritunl.constants import *
 from pritunl import ipaddress
 from pritunl import utils
+from pritunl import database
 
 import threading
 import datetime
@@ -21,13 +22,13 @@ def setup_demo():
         platforms = list(DESKTOP_PLATFORMS)
         start_timestamp = datetime.datetime(2015, 12, 28, 4, 1, 0)
         hosts_collection = mongo.get_collection('hosts')
-        servers_collection  = mongo.get_collection('servers')
+        servers_collection = mongo.get_collection('servers')
         clients_collection = mongo.get_collection('clients')
 
-        clients_collection.remove({})
+        clients_collection.delete_many({})
 
         for hst in host.iter_hosts():
-            hosts_collection.update({
+            hosts_collection.update_one({
                 '_id': hst.id,
             }, {'$set': {
                 'server_count': 0,
@@ -52,12 +53,12 @@ def setup_demo():
             instances = []
             for hst in prefered_hosts:
                 instances.append({
-                    'instance_id': utils.ObjectId(),
+                    'instance_id': database.ObjectId(),
                     'host_id': hst,
                     'ping_timestamp': utils.now(),
                 })
 
-            servers_collection.update({
+            servers_collection.update_one({
                 '_id': svr.id,
             }, {'$set': {
                 'status': ONLINE,
@@ -74,10 +75,10 @@ def setup_demo():
                         continue
 
                     virt_address = svr.get_ip_addr(org.id, usr.id)
-                    virt_address6 = svr.ip4to6(virt_address)
+                    virt_address6 = svr.ip4to6(virt_address) + '/64'
 
                     doc = {
-                        '_id': utils.ObjectId(),
+                        '_id': database.ObjectId(),
                         'user_id': usr.id,
                         'server_id': svr.id,
                         'host_id': settings.local.host_id,
@@ -88,7 +89,7 @@ def setup_demo():
                         'mac_addr': utils.rand_str(16),
                         'network': svr.network,
                         'real_address': str(
-                            ipaddress.IPAddress(100000000 + random.randint(
+                            ipaddress.ip_address(100000000 + random.randint(
                                 0, 1000000000))),
                         'virt_address': virt_address,
                         'virt_address6': virt_address6,
@@ -99,7 +100,7 @@ def setup_demo():
                         'connected_since': int(start_timestamp.strftime('%s')),
                     }
 
-                    clients_collection.insert(doc)
+                    clients_collection.insert_one(doc)
 
         for lnk in link.iter_links():
             lnk.status = ONLINE
@@ -116,6 +117,6 @@ def setup_demo():
 
         logger.info('Demo initiated', 'demo')
 
-    thread = threading.Thread(target=thread)
+    thread = threading.Thread(name="SetupDemo", target=thread)
     thread.daemon = True
     thread.start()

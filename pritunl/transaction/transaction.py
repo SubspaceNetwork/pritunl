@@ -6,6 +6,7 @@ from pritunl import settings
 from pritunl import mongo
 from pritunl import logger
 from pritunl import utils
+from pritunl import database
 
 import collections
 import datetime
@@ -30,13 +31,13 @@ class Transaction(mongo.MongoObject):
     }
 
     def __init__(self, lock_id=None, priority=None, ttl=None, **kwargs):
-        mongo.MongoObject.__init__(self, **kwargs)
+        mongo.MongoObject.__init__(self)
         self.ttl = settings.mongo.tran_ttl
 
         if lock_id is not None:
             self.lock_id = lock_id
         if self.lock_id is None:
-            self.lock_id = utils.ObjectId()
+            self.lock_id = database.ObjectId()
 
         if priority is not None:
             self.priority = priority
@@ -55,50 +56,50 @@ class Transaction(mongo.MongoObject):
     def transaction_collection(cls):
         return mongo.get_collection('transaction')
 
-    def __str__(self):
-        tran_str = ''
-
-        for action_set in self.action_sets:
-            collection_name, bulk, actions, rollback_actions, post_actions = \
-                action_set
-
-            if actions == BULK_EXECUTE:
-                tran_str += '%s_collection.bulk_execute()\n' % collection_name
-            elif actions:
-                tran_str += '%s_collection%s\n' % (collection_name,
-                    '.bulk()' if bulk else '')
-                tran_str = self._str_actions(tran_str, actions)
-
-            if rollback_actions:
-                tran_str += '%s_collection.rollback()\n' % collection_name
-                tran_str = self._str_actions(tran_str, rollback_actions)
-
-            if post_actions:
-                tran_str += '%s_collection.post()\n' % collection_name
-                tran_str = self._str_actions(tran_str, post_actions)
-
-        return tran_str.strip()
+    # def __str__(self):
+    #     tran_str = ''
+    #
+    #     for action_set in self.action_sets:
+    #         collection_name, bulk, actions, rollback_actions, post_actions = \
+    #             action_set
+    #
+    #         if actions == BULK_EXECUTE:
+    #             tran_str += '%s_collection.bulk_execute()\n' % collection_name
+    #         elif actions:
+    #             tran_str += '%s_collection%s\n' % (collection_name,
+    #                 '.bulk()' if bulk else '')
+    #             tran_str = self._str_actions(tran_str, actions)
+    #
+    #         if rollback_actions:
+    #             tran_str += '%s_collection.rollback()\n' % collection_name
+    #             tran_str = self._str_actions(tran_str, rollback_actions)
+    #
+    #         if post_actions:
+    #             tran_str += '%s_collection.post()\n' % collection_name
+    #             tran_str = self._str_actions(tran_str, post_actions)
+    #
+    #     return tran_str.strip()
 
     def collection(self, name):
         return TransactionCollection(collection_name=name,
             action_sets=self.action_sets)
 
-    def _str_actions(self, tran_str, actions):
-        for action in actions:
-            func, args, kwargs = action
-
-            tran_str += '    .%s(' % func
-
-            if args:
-                tran_str += ', '.join(['%s' % x for x in args])
-
-            if kwargs:
-                tran_str += ', '
-                tran_str += ', '.join(['%s=%s' % (x, y)
-                    for x, y in kwargs.items()])
-
-            tran_str += ')\n'
-        return tran_str
+    # def _str_actions(self, tran_str, actions):
+    #     for action in actions:
+    #         func, args, kwargs = action
+    #
+    #         tran_str += '    .%s(' % func
+    #
+    #         if args:
+    #             tran_str += ', '.join(['%s' % x for x in args])
+    #
+    #         if kwargs:
+    #             tran_str += ', '
+    #             tran_str += ', '.join(['%s=%s' % (x, y)
+    #                 for x, y in kwargs.items()])
+    #
+    #         tran_str += ')\n'
+    #     return tran_str
 
     def _run_collection_actions(self, obj, actions):
         for action in actions:
@@ -124,7 +125,7 @@ class Transaction(mongo.MongoObject):
 
     def run_actions(self, update_db=True):
         if update_db:
-            doc = self.transaction_collection.find_and_modify({
+            doc = self.transaction_collection.find_one_and_update({
                 '_id': self.id,
                 'state': PENDING,
             }, {
@@ -135,12 +136,12 @@ class Transaction(mongo.MongoObject):
                 '$inc': {
                     'attempts': 1,
                 },
-            }, new=True)
+            }, return_document=True)
 
             if not doc:
                 return
             elif doc['attempts'] > settings.mongo.tran_max_attempts:
-                response = self.transaction_collection.update({
+                response = self.transaction_collection.update_one({
                     '_id': self.id,
                     'state': PENDING,
                 }, {
@@ -148,7 +149,7 @@ class Transaction(mongo.MongoObject):
                         'state': ROLLBACK,
                     },
                 })
-                if response['updatedExisting']:
+                if bool(response.modified_count):
                     self.rollback_actions()
                 return
 
@@ -161,7 +162,7 @@ class Transaction(mongo.MongoObject):
             )
             raise
 
-        response = self.transaction_collection.update({
+        response = self.transaction_collection.update_one({
             '_id': self.id,
             'state': PENDING,
         }, {
@@ -169,7 +170,7 @@ class Transaction(mongo.MongoObject):
                 'state': COMMITTED,
             },
         })
-        if not response['updatedExisting']:
+        if not bool(response.modified_count):
             return
         self.run_post_actions()
 
@@ -185,7 +186,7 @@ class Transaction(mongo.MongoObject):
             actions=self.action_sets,
         )
 
-        response = self.transaction_collection.update({
+        response = self.transaction_collection.update_one({
             '_id': self.id,
             'state': ROLLBACK,
         }, {
@@ -195,7 +196,7 @@ class Transaction(mongo.MongoObject):
             },
         })
 
-        if not response['updatedExisting']:
+        if not bool(response.modified_count):
             return
 
         try:
@@ -207,7 +208,9 @@ class Transaction(mongo.MongoObject):
             )
             raise
 
-        self.transaction_collection.remove(self.id)
+        self.transaction_collection.delete_one({
+            '_id': self.id,
+        })
 
     def _run_post_actions(self):
         for action_set in self.action_sets:
@@ -217,7 +220,7 @@ class Transaction(mongo.MongoObject):
             self._run_collection_actions(collection, post_actions)
 
     def run_post_actions(self):
-        response = self.transaction_collection.update({
+        response = self.transaction_collection.update_one({
             '_id': self.id,
             'state': COMMITTED,
         }, {
@@ -227,7 +230,7 @@ class Transaction(mongo.MongoObject):
             },
         })
 
-        if not response['updatedExisting']:
+        if not bool(response.modified_count):
             return
 
         try:
@@ -239,7 +242,9 @@ class Transaction(mongo.MongoObject):
             )
             raise
 
-        self.transaction_collection.remove(self.id)
+        self.transaction_collection.delete_one({
+            '_id': self.id,
+        })
 
     def run(self):
         if self.state == PENDING:
@@ -252,9 +257,9 @@ class Transaction(mongo.MongoObject):
     def commit(self):
         actions_json = json.dumps(self.action_sets,
             default=utils.json_default)
-        actions_json_zlib = zlib.compress(actions_json)
+        actions_json_zlib = zlib.compress(actions_json.encode())
 
-        self.transaction_collection.insert({
+        self.transaction_collection.insert_one({
             '_id': self.id,
             'state': PENDING,
             'priority': self.priority,

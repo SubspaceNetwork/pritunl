@@ -17,7 +17,7 @@ import flask
 import threading
 import subprocess
 import os
-import urlparse
+import urllib.parse
 import cheroot.wsgi
 
 server = None
@@ -44,7 +44,7 @@ def stop_server():
 
     setup_ready.set()
     settings.local.server_ready.wait()
-    threading.Thread(target=stop).start()
+    threading.Thread(name="SetupServerStop", target=stop).start()
 
 def redirect(location, code=302):
     url_root = flask.request.headers.get('PR-Forwarded-Url')
@@ -52,7 +52,7 @@ def redirect(location, code=302):
     if url_root[-1] == '/':
         url_root = url_root[:-1]
 
-    return flask.redirect(urlparse.urljoin(url_root, location), code)
+    return flask.redirect(urllib.parse.urljoin(url_root, location), code)
 
 @app.before_request
 def before_request():
@@ -197,10 +197,10 @@ def server_thread():
     server.server_name = ''
 
     if settings.conf.ssl:
-        server_cert_path, server_key_path = upgrade.setup_cert()
+        server_cert, server_key = upgrade.setup_cert()
     else:
-        server_cert_path = None
-        server_key_path = None
+        server_cert = None
+        server_key = None
 
     web_process_state = True
     web_process = subprocess.Popen(
@@ -214,8 +214,10 @@ def server_thread():
             'BIND_HOST': settings.conf.bind_addr,
             'BIND_PORT': str(upgrade.get_server_port()),
             'INTERNAL_ADDRESS': 'localhost:%s' % settings.conf.internal_port,
-            'CERT_PATH': server_cert_path or '',
-            'KEY_PATH': server_key_path or '',
+            'SSL_CERT': server_cert or '',
+            'SSL_KEY': server_key or '',
+            'WEB_STRICT': 'true',
+            'WEB_SECRET': '',
         }),
     )
 
@@ -224,16 +226,16 @@ def server_thread():
         if web_process.wait() and web_process_state:
             time.sleep(0.25)
             if not check_global_interrupt():
-                stdout, stderr = web_process._communicate(None)
+                stdout, stderr = web_process.communicate()
                 logger.error(
                     'Setup web server process exited unexpectedly', 'setup',
-                    stdout=stdout,
-                    stderr=stderr,
+                    stdout=stdout.decode(),
+                    stderr=stderr.decode(),
                 )
             set_global_interrupt()
         else:
             server.interrupt = ServerStop('Stop server')
-    thread = threading.Thread(target=poll_thread)
+    thread = threading.Thread(name="SetupServerStop", target=poll_thread)
     thread.daemon = True
     thread.start()
 
@@ -256,7 +258,7 @@ def upgrade_database():
         except:
             logger.exception('Server upgrade failed')
             set_global_interrupt()
-    threading.Thread(target=_upgrade_thread).start()
+    threading.Thread(name="SetupServerUpgrade", target=_upgrade_thread).start()
 
 def on_system_msg(msg):
     if msg['message'] == SHUT_DOWN:
@@ -308,7 +310,7 @@ def setup_server():
 
         settings.local.server_start.clear()
 
-        thread = threading.Thread(target=server_thread)
+        thread = threading.Thread(name="SetupServer", target=server_thread)
         thread.daemon = True
         thread.start()
 
@@ -323,7 +325,7 @@ def setup_server():
             utils.set_db_ver(__version__, MIN_DATABASE_VER)
             break
         except:
-            time.sleep(0.5)
+            time.sleep(1)
             if time.time() - last_error > 30:
                 last_error = time.time()
                 logger.exception('Error connecting to mongodb server')

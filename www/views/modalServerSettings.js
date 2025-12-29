@@ -16,6 +16,7 @@ define([
     errorMsg: 'Failed to saving server, server error occurred.',
     enterOk: false,
     hasAdvanced: true,
+    hasWarning: false,
     events: function() {
       return _.extend({
         'change .dh-param-bits select': 'onDhParamBits',
@@ -28,8 +29,16 @@ define([
         'click .ipv6-toggle': 'onIpv6Select',
         'click .multi-device-toggle': 'onMultiDeviceSelect',
         'click .vxlan-toggle': 'onVxlanSelect',
+        'click .dynamic-firewall-toggle': 'onDynamicFirewallSelect',
+        'click .geo-sort-toggle': 'onGeoSortSelect',
+        'click .force-connect-toggle': 'onForceConnectSelect',
+        'click .route-dns-toggle': 'onRouteDnsSelect',
+        'click .device-auth-toggle': 'onDeviceAuthSelect',
+        'click .sso-auth-toggle': 'onSsoAuthSelect',
         'click .ipv6-firewall-toggle': 'onIpv6FirewallSelect',
+        'click .wg-toggle': 'onWgSelect',
         'click .restrict-routes-toggle': 'onRestrictRoutesSelect',
+        'click .multihome-toggle': 'onMultihomeSelect',
         'change select.protocol, .cipher select, .network-mode select':
           'onInputChange',
         'click div.otp-auth-toggle': 'onInputChange'
@@ -39,20 +48,31 @@ define([
       return this.template(this.model.toJSON());
     },
     postRender: function() {
+      this.hasWarning = false
       this.$('.groups input').select2({
         tags: [],
         tokenSeparators: [',', ' '],
         width: '200px'
       });
       this.$('.network .label').tooltip();
-      this.updateMaxHosts();
+      this.$('.network-wg .label').tooltip();
+      this.updateMaxHosts(false);
+      this.updateMaxHosts(true);
+      if (parseInt(this.$('.dh-param-bits select').val(), 10) < 2048) {
+        this.setAlert('danger', 'Using DH Param Bits less then 2048 is ' +
+          'not compatible with newer versions of OpenSSL.', '.dh-param-bits');
+      }
     },
     onDhParamBits: function(evt) {
       var val = $(evt.target).val();
       if (val > 2048) {
-        this.setAlert('danger', 'Using dh parameters larger then 2048 can ' +
+        this.setAlert('danger', 'Using DH Param Bits larger then 2048 can ' +
           'take several hours to generate.', '.dh-param-bits');
+      } else if (val < 2048) {
+        this.setAlert('danger', 'Using DH Param Bits less then 2048 is ' +
+          'not compatible with newer versions of OpenSSL.', '.dh-param-bits');
       } else {
+        this.hasWarning = false
         this.clearAlert();
       }
     },
@@ -169,6 +189,26 @@ define([
     onRestrictRoutesSelect: function() {
       this.setRestrictRoutesSelect(!this.getRestrictRoutesSelect());
     },
+    getWgSelect: function() {
+      return this.$('.wg-toggle .selector').hasClass('selected');
+    },
+    setWgSelect: function(state) {
+      if (state) {
+        this.$('.wg-toggle .selector').addClass('selected');
+        this.$('.wg-toggle .selector-inner').show();
+        this.$('.port-wg').slideDown(window.slideTime);
+        this.$('.network-wg').slideDown(window.slideTime);
+      }
+      else {
+        this.$('.wg-toggle .selector').removeClass('selected');
+        this.$('.wg-toggle .selector-inner').hide();
+        this.$('.port-wg').slideUp(window.slideTime);
+        this.$('.network-wg').slideUp(window.slideTime);
+      }
+    },
+    onWgSelect: function() {
+      this.setWgSelect(!this.getWgSelect());
+    },
     getIpv6Select: function() {
       return this.$('.ipv6-toggle .selector').hasClass('selected');
     },
@@ -243,6 +283,125 @@ define([
     onVxlanSelect: function() {
       this.setVxlanSelect(!this.getVxlanSelect());
     },
+    getHideOvpnSelect: function() {
+      return this.$('.hide-ovpn-toggle .selector').hasClass(
+        'selected');
+    },
+    setHideOvpnSelect: function(state) {
+      if (state) {
+        this.$('.hide-ovpn-toggle .selector').addClass('selected');
+        this.$('.hide-ovpn-toggle .selector-inner').show();
+      }
+      else {
+        this.$('.hide-ovpn-toggle .selector').removeClass('selected');
+        this.$('.hide-ovpn-toggle .selector-inner').hide();
+      }
+    },
+    onHideOvpnSelect: function() {
+      this.setHideOvpnSelect(!this.getHideOvpnSelect());
+    },
+    getDynamicFirewallSelect: function() {
+      return this.$('.dynamic-firewall-toggle .selector').hasClass(
+        'selected');
+    },
+    setDynamicFirewallSelect: function(state) {
+      if (state) {
+        this.$('.dynamic-firewall-toggle .selector').addClass('selected');
+        this.$('.dynamic-firewall-toggle .selector-inner').show();
+      }
+      else {
+        this.$('.dynamic-firewall-toggle .selector').removeClass('selected');
+        this.$('.dynamic-firewall-toggle .selector-inner').hide();
+      }
+    },
+    onDynamicFirewallSelect: function() {
+      this.setDynamicFirewallSelect(!this.getDynamicFirewallSelect());
+    },
+    getGeoSortSelect: function() {
+      return this.$('.geo-sort-toggle .selector').hasClass(
+        'selected');
+    },
+    setGeoSortSelect: function(state) {
+      if (state) {
+        this.$('.geo-sort-toggle .selector').addClass('selected');
+        this.$('.geo-sort-toggle .selector-inner').show();
+      }
+      else {
+        this.$('.geo-sort-toggle .selector').removeClass('selected');
+        this.$('.geo-sort-toggle .selector-inner').hide();
+      }
+    },
+    onGeoSortSelect: function() {
+      this.setGeoSortSelect(!this.getGeoSortSelect());
+    },
+    getForceConnectSelect: function() {
+      return this.$('.force-connect-toggle .selector').hasClass(
+        'selected');
+    },
+    setForceConnectSelect: function(state) {
+      if (state) {
+        this.$('.force-connect-toggle .selector').addClass('selected');
+        this.$('.force-connect-toggle .selector-inner').show();
+      }
+      else {
+        this.$('.force-connect-toggle .selector').removeClass('selected');
+        this.$('.force-connect-toggle .selector-inner').hide();
+      }
+    },
+    onForceConnectSelect: function() {
+      this.setForceConnectSelect(!this.getForceConnectSelect());
+    },
+    getRouteDnsSelect: function() {
+      return this.$('.route-dns-toggle .selector').hasClass(
+        'selected');
+    },
+    setRouteDnsSelect: function(state) {
+      if (state) {
+        this.$('.route-dns-toggle .selector').addClass('selected');
+        this.$('.route-dns-toggle .selector-inner').show();
+      }
+      else {
+        this.$('.route-dns-toggle .selector').removeClass('selected');
+        this.$('.route-dns-toggle .selector-inner').hide();
+      }
+    },
+    onRouteDnsSelect: function() {
+      this.setRouteDnsSelect(!this.getRouteDnsSelect());
+    },
+    getDeviceAuthSelect: function() {
+      return this.$('.device-auth-toggle .selector').hasClass(
+        'selected');
+    },
+    setDeviceAuthSelect: function(state) {
+      if (state) {
+        this.$('.device-auth-toggle .selector').addClass('selected');
+        this.$('.device-auth-toggle .selector-inner').show();
+      }
+      else {
+        this.$('.device-auth-toggle .selector').removeClass('selected');
+        this.$('.device-auth-toggle .selector-inner').hide();
+      }
+    },
+    onDeviceAuthSelect: function() {
+      this.setDeviceAuthSelect(!this.getDeviceAuthSelect());
+    },
+    getSsoAuthSelect: function() {
+      return this.$('.sso-auth-toggle .selector').hasClass(
+        'selected');
+    },
+    setSsoAuthSelect: function(state) {
+      if (state) {
+        this.$('.sso-auth-toggle .selector').addClass('selected');
+        this.$('.sso-auth-toggle .selector-inner').show();
+      }
+      else {
+        this.$('.sso-auth-toggle .selector').removeClass('selected');
+        this.$('.sso-auth-toggle .selector-inner').hide();
+      }
+    },
+    onSsoAuthSelect: function() {
+      this.setSsoAuthSelect(!this.getSsoAuthSelect());
+    },
     getIpv6FirewallSelect: function() {
       return this.$('.ipv6-firewall-toggle .selector').hasClass('selected');
     },
@@ -259,9 +418,28 @@ define([
     onIpv6FirewallSelect: function() {
       this.setIpv6FirewallSelect(!this.getIpv6FirewallSelect());
     },
+    getMultihomeSelect: function() {
+      return this.$('.multihome-toggle .selector').hasClass('selected');
+    },
+    setMultihomeSelect: function(state) {
+      if (state) {
+        this.$('.multihome-toggle .selector').addClass('selected');
+        this.$('.multihome-toggle .selector-inner').show();
+      }
+      else {
+        this.$('.multihome-toggle .selector').removeClass('selected');
+        this.$('.multihome-toggle .selector-inner').hide();
+      }
+    },
+    onMultihomeSelect: function() {
+      this.setMultihomeSelect(!this.getMultihomeSelect());
+    },
     onInputChange: function(evt) {
       if ($(evt.target).parent().hasClass('network')) {
-        this.updateMaxHosts();
+        this.updateMaxHosts(false);
+      }
+      if ($(evt.target).parent().hasClass('network-wg')) {
+        this.updateMaxHosts(true);
       }
 
       if (this.newServer) {
@@ -283,11 +461,16 @@ define([
         networkMode !== this.model.get('network_mode') ||
         otpAuth !== this.model.get('otp_auth')
       ) {
-        this.setAlert('warning', 'These changes will require users ' +
-          'that are not using an offical Pritunl client to download their ' +
-          'updated profile again before being able to connect. Users ' +
-          'using an offical Pritunl client will be able sync the changes.');
+        if (!this.hasWarning) {
+          this.hasWarning = true
+          this.setAlert('warning', 'These changes will require users ' +
+            'that are not using an official Pritunl client to download ' +
+            'their updated profile again before being able to connect. ' +
+            'Users using an official Pritunl client will be able sync ' +
+            'the changes.');
+        }
       } else {
+        this.hasWarning = false
         this.clearAlert();
       }
     },
@@ -303,8 +486,18 @@ define([
       }
       return dnsServers;
     },
-    updateMaxHosts: function() {
-      var value = this.$('.network input').val().split('/');
+    updateMaxHosts: function(wg) {
+      var tar;
+      var tarLabel;
+      if (wg) {
+        tar = this.$('.network-wg input');
+        tarLabel = this.$('.network-wg .label');
+      } else {
+        tar = this.$('.network input');
+        tarLabel = this.$('.network .label');
+      }
+
+      var value = tar.val().split('/');
       var maxHosts = {
         8: '16m',
         9: '8m',
@@ -333,12 +526,12 @@ define([
       if (value.length === 2) {
         var max = maxHosts[value[1]];
         if (max) {
-          this.$('.network .label').text(max + ' Users');
-          this.$('.network .label').show();
+          tarLabel.text(max + ' Users');
+          tarLabel.show();
           return;
         }
       }
-      this.$('.network .label').hide();
+      tarLabel.hide();
     },
     getGroups: function() {
       var groups = [];
@@ -360,9 +553,17 @@ define([
     onOk: function() {
       var name = this.$('.name input').val();
       var network = this.$('.network input').val();
+      var networkWg = this.$('.network-wg input').val();
       var port = parseInt(this.$('input.port').val(), 10);
+      var portWg = parseInt(this.$('.port-wg input').val(), 10);
       var protocol = this.$('select.protocol').val();
       var dhParamBits = parseInt(this.$('.dh-param-bits select').val(), 10);
+      var hideOvpn = this.getHideOvpnSelect();
+      var dynamicFirewall = this.getDynamicFirewallSelect();
+      var geoSort = this.getGeoSortSelect();
+      var forceConnect = this.getForceConnectSelect();
+      var routeDns = this.getRouteDnsSelect();
+      var deviceAuth = this.getDeviceAuthSelect();
       var ipv6 = this.getIpv6Select();
       var ipv6Firewall = this.getIpv6FirewallSelect();
       var multiDevice = this.getMultiDeviceSelect();
@@ -377,6 +578,8 @@ define([
         this.$('.link-ping-timeout input').val(), 10);
       var inactiveTimeout = parseFloat(
         this.$('.inactive-timeout input').val(), 10);
+      var sessionTimeout = parseFloat(
+        this.$('.session-timeout input').val(), 10);
       var allowedDevices = this.$('.allowed-devices select').val();
       var maxClients = parseInt(this.$('.max-clients input').val(), 10);
       var maxDevices = parseInt(this.$('.max-devices input').val(), 10);
@@ -384,7 +587,9 @@ define([
       var dnsMapping = this.getDnsMappingSelect();
       var debug = this.getDebugSelect();
       var otpAuth = this.getOtpAuthSelect();
+      var ssoAuth = this.getSsoAuthSelect();
       var restrictRoutes = this.getRestrictRoutesSelect();
+      var wg = this.getWgSelect();
       var vxlan = this.getVxlanSelect();
       var cipher = this.$('.cipher select').val();
       var hash = this.$('.hash select').val();
@@ -399,7 +604,10 @@ define([
       var groups = this.getGroups();
       var preConnectMsg = this.$(
         '.pre-connect-msg textarea').val().trim() || null;
-      var mssFix = this.$('.mss-fix input').val() || null;
+      var mssFix =  parseInt(this.$('.mss-fix input').val(), 10) || null;
+      var multihome = this.getMultihomeSelect();
+
+      this.hasWarning = false
 
       if (!name) {
         this.setAlert('danger', 'Name can not be empty.', '.name');
@@ -409,8 +617,16 @@ define([
         this.setAlert('danger', 'Network can not be empty.', '.network');
         return;
       }
+      if (wg && !networkWg) {
+        this.setAlert('danger', 'WG Network can not be empty.', '.network-wg');
+        return;
+      }
       if (!port) {
         this.setAlert('danger', 'Port can not be empty.', 'input.port');
+        return;
+      }
+      if (wg && !portWg) {
+        this.setAlert('danger', 'WG Port can not be empty.', '.port-wg');
         return;
       }
       if (!searchDomain) {
@@ -433,21 +649,31 @@ define([
         'name': name,
         'type': this.model.get('type'),
         'network': network,
+        'network_wg': networkWg,
         'groups': groups,
         'bind_address': bindAddress,
         'port': port,
+        'port_wg': portWg,
         'protocol': protocol,
         'dh_param_bits': dhParamBits,
         'network_mode': networkMode,
         'network_start': networkStart,
         'network_end': networkEnd,
         'restrict_routes': restrictRoutes,
+        'wg': wg,
+        'hide_ovpn': hideOvpn,
+        'dynamic_firewall': dynamicFirewall,
+        'geo_sort': geoSort,
+        'force_connect': forceConnect,
+        'route_dns': routeDns,
+        'device_auth': deviceAuth,
         'ipv6': ipv6,
         'ipv6_firewall': ipv6Firewall,
         'multi_device': multiDevice,
         'dns_servers': dnsServers,
         'search_domain': searchDomain,
         'otp_auth': otpAuth,
+        'sso_auth': ssoAuth,
         'cipher': cipher,
         'hash': hash,
         'block_outside_dns': blockOutsideDns,
@@ -457,6 +683,7 @@ define([
         'link_ping_interval': linkPingInterval,
         'link_ping_timeout': linkPingTimeout,
         'inactive_timeout': inactiveTimeout,
+        'session_timeout': sessionTimeout,
         'allowed_devices': allowedDevices,
         'max_clients': maxClients,
         'max_devices': maxDevices,
@@ -465,6 +692,7 @@ define([
         'dns_mapping': dnsMapping,
         'debug': debug,
         'mss_fix': mssFix,
+        'multihome': multihome,
         'pre_connect_msg': preConnectMsg
       };
 

@@ -45,9 +45,7 @@ def iter_hosts(spec=None, fields=None, page=None):
 def get_host_page_total():
     host_collection = mongo.get_collection('hosts')
 
-    count = host_collection.find({}, {
-        '_id': True,
-    }).count()
+    count = host_collection.estimated_document_count()
 
     return int(math.floor(max(0, float(count - 1)) /
         settings.app.host_page_count))
@@ -55,12 +53,9 @@ def get_host_page_total():
 def get_hosts_online():
     host_collection = mongo.get_collection('hosts')
 
-    return host_collection.find({
+    return host_collection.count_documents({
         'status': ONLINE,
-    }, {
-        '_id': True,
-        'status': True,
-    }).count()
+    })
 
 def iter_hosts_dict(page=None):
     clients_collection = mongo.get_collection('clients')
@@ -165,14 +160,13 @@ def init():
                 interface=settings.conf.local_address_interface)
             settings.local.host.auto_local_address6 = None
 
-    settings.local.host.auto_instance_id = utils.get_instance_id()
     settings.local.host.local_networks = utils.get_local_networks()
 
     settings.local.host.commit()
     event.Event(type=HOSTS_UPDATED)
 
 def deinit():
-    Host.collection.update({
+    Host.collection.update_one({
         '_id': settings.local.host_id,
     }, {'$set': {
         'status': OFFLINE,

@@ -1,6 +1,622 @@
 Pritunl Changelog
 =================
 
+Version 1.32.4469.94 2025-12-07
+-------------------------------
+
+Fix renew organization certificates command
+
+Version 1.32.4465.96 2025-12-03
+-------------------------------
+
+Add offline subscription
+Add sso outage bypass mode
+Web server updates
+Update server default routes
+Add secondary request nacl token
+Add support for route advertisements on replicated servers
+Add support for Pritunl Cloud
+
+Version 1.32.4400.99 2025-09-29
+-------------------------------
+
+Web server tuning
+
+Version 1.32.4399.86 2025-09-28
+-------------------------------
+
+Fix performance issues with client connection requests
+Add warning for certificate expiration
+
+Version 1.32.4388.46 2025-09-17
+-------------------------------
+
+Improve server MTU settings
+
+Version 1.32.4387.45 2025-09-16
+-------------------------------
+
+Fix issues with event system
+Fix server MTU issues
+
+Version 1.32.4349.59 2025-08-09
+-------------------------------
+
+Fix issue with Google single sign-on timeouts
+Update libraries
+
+Version 1.32.4278.46 2025-05-30
+-------------------------------
+
+Improve connection single sign-on
+
+Version 1.32.4258.38 2025-05-10
+-------------------------------
+
+Add support for WireGuard with Pritunl Link
+Add support for connection single sign-on with YubiKey on all user types
+Fix issues with user IP pool management
+
+Version 1.32.4181.41 2025-02-22
+-------------------------------
+
+Fix Radius compatibility with device authentication and dynamic firewall
+Fix Google single sign-on issues with updated openssl library
+Improve audit journal logging
+
+Version 1.32.4173.66 2025-02-14
+-------------------------------
+
+Fix issues with server management
+Update libraries
+
+Version 1.32.4170.67 2025-02-11
+-------------------------------
+
+Allow some server changes while running
+Update libraries
+
+Version 1.32.4115.91 2024-12-18
+-------------------------------
+
+Update subscription checkout
+
+Version 1.32.4103.16 2024-12-06
+-------------------------------
+
+Add user bandwidth monitoring plugin
+
+Version 1.32.4093.80 2024-11-26
+-------------------------------
+
+Fix DNS routing
+
+Version 1.32.4089.16 2024-11-22
+-------------------------------
+
+Reduce CPU usage for WireGuard connections
+Fix issue with WireGuard connection timeouts with modified ttl
+Fix issue with slow single sign-on updates causing connection timeouts
+Improve web server performance
+Add WireGuard ping interval and ping timeout to server settings
+
+Version 1.32.4057.36 2024-10-21
+-------------------------------
+
+Fix user search
+
+Version 1.32.4047.16 2024-10-11
+-------------------------------
+
+Add device registration key override
+
+Version 1.32.4034.11 2024-09-28
+-------------------------------
+
+Add geo sort host selection
+Refactor database code
+
+Version 1.32.3897.75 2024-05-14
+-------------------------------
+
+Change profile page layout
+
+Version 1.32.3805.95 2024-02-12
+-------------------------------
+
+Fix mobile device connection issues
+
+Version 1.32.3805.31 2024-02-12
+-------------------------------
+
+Fix slow startup
+
+Version 1.32.3801.41 2024-02-08
+-------------------------------
+
+Improve IP pool
+Add IMDSv2 for AWS
+Fix mobile device connection issues
+Fix connection issues with linked servers
+Improve error logging
+
+Version 1.32.3746.95 2023-12-15
+-------------------------------
+
+Fix memory leak
+
+Version 1.32.3732.84 2023-12-01
+-------------------------------
+
+Fix issue with linked servers
+
+Version 1.32.3725.2 2023-11-24
+------------------------------
+
+Fix server MTU configuration
+Remove user inactive timeout
+Fix issue with links
+
+Version 1.32.3719.89 2023-11-18
+-------------------------------
+
+Fix device registration issue
+
+Version 1.32.3697.80 2023-10-27
+-------------------------------
+
+Add restrict client option
+Fix wg DNS issue
+Update libraries
+
+Version 1.32.3660.72 2023-09-20
+-------------------------------
+
+Add DNS routing option
+Fix IPv6 route metric option
+
+Version 1.32.3602.80 2023-07-24
+-------------------------------
+
+Fix issue with VXLan
+
+Version 1.32.3588.94 2023-07-10
+-------------------------------
+
+Web interface improvements
+
+Version 1.32.3585.79 2023-07-07
+-------------------------------
+
+Fix connection issues
+
+Version 1.32.3571.58 2023-06-23
+-------------------------------
+
+Fix issue with Radius cache
+
+Version 1.32.3552.76 2023-06-04
+-------------------------------
+
+Fix routing issues with block route option
+
+Version 1.32.3533.94 2023-05-16
+-------------------------------
+
+Add block route option
+
+Version 1.32.3504.68 2023-04-17
+-------------------------------
+
+Fix update issues
+
+Version 1.32.3498.90 2023-04-11
+-------------------------------
+
+Improve device authentication
+
+Version 1.32.3487.33 2023-03-31
+-------------------------------
+
+Add device authentication auditing
+
+Version 1.32.3480.65 2023-03-24
+-------------------------------
+
+Fix device authentication issues
+
+Version 1.32.3480.55 2023-03-24
+-------------------------------
+
+Fix device authentication issues
+
+Version 1.32.3479.95 2023-03-23
+-------------------------------
+
+Add device authentication
+
+Version 1.32.3457.59 2023-03-01
+-------------------------------
+
+Fix connection issues
+
+Version 1.32.3453.48 2023-02-25
+-------------------------------
+
+Migrate to python 3.9
+Add multihome option to server settings
+
+Version 1.30.3431.73 2023-02-03
+-------------------------------
+
+Add support for user network links with replicated servers
+Fix issue with JumpCloud users connected to more than 10 applications
+
+Version 1.30.3414.5 2023-01-17
+------------------------------
+
+Update selinux policies
+
+Version 1.30.3413.7 2023-01-16
+------------------------------
+
+Web interface improvements
+
+Version 1.30.3407.90 2023-01-10
+-------------------------------
+
+Check user single sign-on status during connection
+
+Version 1.30.3388.46 2022-12-22
+-------------------------------
+
+Web server improvements
+
+Version 1.30.3383.72 2022-12-17
+-------------------------------
+
+Add renew SSL command
+
+Version 1.30.3354.99 2022-11-18
+-------------------------------
+
+Web interface improvements
+
+Version 1.30.3343.47 2022-11-07
+-------------------------------
+
+Fix client reconnect issue with third party clients
+
+Version 1.30.3333.72 2022-10-28
+-------------------------------
+
+Fix startup issues
+
+Version 1.30.3331.78 2022-10-26
+-------------------------------
+
+Add connection single sign-on authentication
+Fix issue with lost IP addresses from client pool
+
+Version 1.30.3292.22 2022-09-17
+-------------------------------
+
+Fix initialization issues
+
+Version 1.30.3291.77 2022-09-16
+-------------------------------
+
+Fix initialization issues
+
+Version 1.30.3290.55 2022-09-15
+-------------------------------
+
+Improve web console layout
+Fix JumpCloud single sign-on
+
+Version 1.30.3236.80 2022-07-23
+-------------------------------
+
+Improve dynamic firewall support
+
+Version 1.30.3235.85 2022-07-22
+-------------------------------
+
+Web interface improvements
+
+Version 1.30.3233.96 2022-07-20
+-------------------------------
+
+Fix server issues
+
+Version 1.30.3226.71 2022-07-13
+-------------------------------
+
+Fix web interface display issues
+
+Version 1.30.3221.67 2022-07-08
+-------------------------------
+
+Add dynamic firewall
+Improve single sign-on
+
+Version 1.30.3157.70 2022-05-05
+-------------------------------
+
+Support Azure users with more then 50 groups
+Update web server cipher suite
+
+Version 1.30.3153.83 2022-05-01
+-------------------------------
+
+Fix issue with Chrome OS profiles
+
+Version 1.30.3149.73 2022-04-27
+-------------------------------
+
+Improve server routing
+
+Version 1.30.3116.68 2022-03-25
+-------------------------------
+
+Add user last active
+Add Yubikey support for all user types
+
+Version 1.30.3113.65 2022-03-22
+-------------------------------
+
+Fix library issue
+
+Version 1.30.3112.0 2022-03-21
+------------------------------
+
+Web interface improvements
+
+Version 1.30.3111.72 2022-03-20
+-------------------------------
+
+Improve client connections
+
+Version 1.30.3108.50 2022-03-17
+-------------------------------
+
+Fix wg port forwarding
+
+Version 1.30.3106.58 2022-03-15
+-------------------------------
+
+Fix server restart when using drop permissions
+
+Version 1.30.3102.46 2022-03-11
+-------------------------------
+
+Fix startup issues
+
+Version 1.30.3102.41 2022-03-11
+-------------------------------
+
+Update libraries
+
+Version 1.30.3101.90 2022-03-10
+-------------------------------
+
+Improve reconnections with two-factor authentication
+
+Version 1.30.3101.81 2022-03-10
+-------------------------------
+
+Update libraries
+
+Version 1.30.3098.52 2022-03-07
+-------------------------------
+
+Add custom IPsec ciphers to links
+Improve connection time with Azure users
+Add drop permissions option to settings
+
+Version 1.30.3070.59 2022-02-07
+-------------------------------
+
+Improve server routing
+
+Version 1.30.3065.49 2022-02-02
+-------------------------------
+
+Fix server issue on rhel7
+
+Version 1.30.3058.49 2022-01-26
+-------------------------------
+
+Add backoff timeout to link
+Fix server routing
+
+Version 1.30.3053.58 2022-01-21
+-------------------------------
+
+Fix server startup with large route lists
+
+Version 1.30.3043.48 2022-01-11
+-------------------------------
+
+Fix web interface display issues
+
+Version 1.30.3040.44 2022-01-08
+-------------------------------
+
+Fix DNS mapping issue when running multiple servers
+
+Version 1.30.3030.85 2021-12-29
+-------------------------------
+
+Add JumpCloud single sign-on
+
+Version 1.30.3023.56 2021-12-22
+-------------------------------
+
+Fix connection issue
+
+Version 1.30.3012.75 2021-12-11
+-------------------------------
+
+Fix connection issues
+Fix profile download issues
+
+Version 1.30.3007.74 2021-12-06
+-------------------------------
+
+Fix server startup issues
+
+Version 1.30.3001.87 2021-11-30
+-------------------------------
+
+Improve server mangement
+
+Version 1.30.3001.35 2021-11-30
+-------------------------------
+
+Web interface improvements
+
+Version 1.30.2969.92 2021-10-29
+-------------------------------
+
+Add support for Azure graph API
+
+Version 1.30.2960.4 2021-10-20
+------------------------------
+
+Update libraries
+
+Version 1.30.2959.58 2021-10-19
+-------------------------------
+
+Fix Radius authentication
+
+Version 1.30.2945.60 2021-10-05
+-------------------------------
+
+Change installation paths
+
+Version 1.30.2945.35 2021-10-05
+-------------------------------
+
+Fix certificate error
+
+Version 1.30.2944.96 2021-10-04
+-------------------------------
+
+Fix Duo api error
+
+Version 1.30.2943.13 2021-10-03
+-------------------------------
+
+Add link host checking
+Fix Lets Encrypt certificates
+
+Version 1.30.2919.89 2021-09-09
+-------------------------------
+
+Improve server mangement
+Fix linked server connection issue
+
+Version 1.30.2856.5 2021-07-08
+------------------------------
+
+Fix routing issue
+
+Version 1.30.2847.71 2021-06-29
+-------------------------------
+
+Improve routing mangement
+
+Version 1.30.2817.44 2021-05-30
+-------------------------------
+
+Migrate to python 3
+
+Version 1.29.2664.67 2020-12-28
+-------------------------------
+
+Improve Lets Encrypt support
+Add IPv6 support to client DNS mapping
+Fix issue with routing
+
+Version 1.29.2591.94 2020-10-16
+-------------------------------
+
+Improve MAC address detection on wg connections
+
+Version 1.29.2547.95 2020-09-02
+-------------------------------
+
+Improve selinux policies
+
+Version 1.29.2530.72 2020-08-16
+-------------------------------
+
+Fix wg issue on rhel7
+
+Version 1.29.2524.85 2020-08-10
+-------------------------------
+
+Improve server configuration
+Fix issue with multiple devices
+
+Version 1.29.2490.44 2020-07-07
+-------------------------------
+
+Improve user API
+
+Version 1.29.2468.79 2020-06-15
+-------------------------------
+
+Fix issue creating users
+
+Version 1.29.2468.29 2020-06-15
+-------------------------------
+
+Add selinux policy for rhel8
+
+Version 1.29.2435.70 2020-05-13
+-------------------------------
+
+Fix issue removing linked servers
+
+Version 1.29.2427.61 2020-05-05
+-------------------------------
+
+Server improvements
+
+Version 1.29.2423.17 2020-05-01
+-------------------------------
+
+Add server session timeout
+Support user MAC address validation
+
+Version 1.29.2395.63 2020-04-03
+-------------------------------
+
+Fix issue with wg network links
+
+Version 1.29.2394.19 2020-04-02
+-------------------------------
+
+Fix server management
+
+Version 1.29.2392.39 2020-03-31
+-------------------------------
+
+Server improvements
+
+Version 1.29.2388.59 2020-03-27
+-------------------------------
+
+Fix server init
+
+Version 1.29.2388.46 2020-03-27
+-------------------------------
+
+Add support for wg
+
 Version 1.29.2276.91 2019-12-06
 -------------------------------
 

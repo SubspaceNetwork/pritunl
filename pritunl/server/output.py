@@ -29,7 +29,7 @@ class ServerOutput(object):
         )
 
     def clear_output(self):
-        self.collection.remove({
+        self.collection.delete_many({
             'server_id': self.server_id,
         })
         self.send_event(delay=False)
@@ -47,7 +47,7 @@ class ServerOutput(object):
             doc_ids.append(doc['_id'])
 
         if doc_ids:
-            self.collection.remove({
+            self.collection.delete_one({
                 '_id': {'$in': doc_ids},
             })
 
@@ -57,7 +57,7 @@ class ServerOutput(object):
 
         label = label or settings.local.host.name
 
-        self.collection.insert({
+        self.collection.insert_one({
             'server_id': self.server_id,
             'timestamp': utils.now(),
             'output': '[%s] %s' % (label, output.rstrip('\n')),
@@ -67,9 +67,7 @@ class ServerOutput(object):
         self.send_event()
 
     def push_message(self, message, *args, **kwargs):
-        timestamp = datetime.datetime.now().strftime(
-            '%a %b  %d %H:%M:%S %Y').replace('  0', '   ', 1).replace(
-            '  ', ' ', 1)
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         self.push_output('%s %s' % (timestamp, message), *args, **kwargs)
 
     def get_output(self):

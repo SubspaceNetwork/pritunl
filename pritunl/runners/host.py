@@ -120,9 +120,7 @@ def _keep_alive_thread():
                     settings.local.public_ip6
                 host_event = True
 
-            settings.local.host.collection.update({
-                '_id': settings.local.host_id,
-            }, {'$set': {
+            data = {
                 'version': settings.local.version,
                 'server_count': server_count,
                 'device_count': device_count,
@@ -132,11 +130,18 @@ def _keep_alive_thread():
                 'open_file_count': open_file_count,
                 'status': ONLINE,
                 'ping_timestamp': utils.now(),
-                'auto_public_address': settings.local.public_ip,
-                'auto_public_address6': settings.local.public_ip6,
                 'auto_public_host': auto_public_host,
                 'auto_public_host6': auto_public_host6,
-            }})
+            }
+
+            if settings.local.public_ip:
+                data['auto_public_address'] = settings.local.public_ip
+            if settings.local.public_ip6:
+                data['auto_public_address6'] = settings.local.public_ip6
+
+            settings.local.host.collection.update_one({
+                '_id': settings.local.host_id,
+            }, {'$set': data})
 
             if host_event:
                 host_event = False
@@ -163,4 +168,4 @@ def _keep_alive_thread():
             time.sleep(0.5)
 
 def start_host():
-    threading.Thread(target=_keep_alive_thread).start()
+    threading.Thread(name="HostKeepAlive", target=_keep_alive_thread).start()

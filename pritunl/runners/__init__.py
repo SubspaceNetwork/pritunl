@@ -6,6 +6,7 @@ from pritunl.runners.transaction import start_transaction
 from pritunl.runners.task import start_task
 from pritunl.runners.queue import start_queue
 from pritunl.runners.event import start_event
+from pritunl.runners.firewall import start_firewall
 from pritunl.runners.host import start_host
 from pritunl.runners.subscription import start_subscription
 from pritunl.runners.server import start_server
@@ -14,6 +15,7 @@ from pritunl.runners.instance import start_instance
 from pritunl.runners.time_sync import start_time_sync
 from pritunl.runners.limiter import start_limiter
 from pritunl.runners.listener import start_listener
+from pritunl.runners.tokens import start_tokens
 
 def start_all():
     start_settings()
@@ -24,6 +26,7 @@ def start_all():
     start_task()
     start_queue()
     start_event()
+    start_firewall()
     start_host()
     start_subscription()
     start_server()
@@ -31,5 +34,6 @@ def start_all():
     start_time_sync()
     start_limiter()
     start_update_server()
+    start_tokens()
 
     start_listener()

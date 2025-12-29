@@ -14,6 +14,7 @@ define([
     template: _.template(serverRoutesListItemTemplate),
     events: {
       'click .route-network': 'onModify',
+      'click .server-settings-route': 'onModify',
       'click .server-remove-route': 'onRemove'
     },
     initialize: function(options) {
@@ -35,10 +36,17 @@ define([
       } else {
         this.$('.route-vpc-id').hide();
       }
-      if (this.model.get('virtual_network')) {
+      if (this.model.get('virtual_network') &&
+          !this.model.get('wg_network')) {
         this.$('.route-virtual-network').show();
       } else {
         this.$('.route-virtual-network').hide();
+      }
+      if (this.model.get('virtual_network') &&
+          this.model.get('wg_network')) {
+        this.$('.route-virtual-network-wg').show();
+      } else {
+        this.$('.route-virtual-network-wg').hide();
       }
       if (this.model.get('network_link')) {
         this.$('.route-network-link').show();

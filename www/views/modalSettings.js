@@ -25,10 +25,13 @@ define([
         'paste .pass input': 'onPassEvent',
         'input .pass input': 'onPassEvent',
         'change .route53-region select': 'updateZones',
+        'click .ipv6': 'onIpv6Select',
         'click .sso-cache': 'onSsoCacheSelect',
         'click .sso-client-cache': 'onSsoClientCacheSelect',
         'click .restrict-import': 'onRestrictImportSelect',
+        'click .restrict-client': 'onRestrictClientSelect',
         'click .client-reconnect': 'onClientReconnect',
+        'click .drop-permissions': 'onDropPermissions',
         'propertychange .pass input': 'onPassEvent',
         'change .cloud-provider select': 'onCloudProviderChange',
         'change .monitoring select': 'onMonitoringChange',
@@ -116,12 +119,17 @@ define([
       return this.$('.sso-mode select').val();
     },
     setSsoMode: function(mode) {
+      this.$('.sso-azure-version select').val('2');
+      this.$('.sso-azure-region select').val('global');
+
       if (!mode) {
         this.$('.sso-match-slack').slideUp(window.slideTime);
         this.$('.sso-match-google').slideUp(window.slideTime);
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -142,6 +150,8 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.client-reconnect').slideUp(window.slideTime);
@@ -161,6 +171,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -173,6 +185,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-saml-url').slideDown(window.slideTime);
@@ -184,6 +199,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -196,6 +213,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-token').slideDown(window.slideTime);
@@ -215,6 +235,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -227,6 +249,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-saml-url').slideDown(window.slideTime);
@@ -242,6 +267,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -251,6 +278,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-saml-url').slideDown(window.slideTime);
@@ -265,6 +295,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -274,6 +306,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-okta-mode').slideUp(window.slideTime);
@@ -296,6 +331,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -305,6 +342,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-saml-url').slideDown(window.slideTime);
@@ -323,6 +363,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -331,6 +373,9 @@ define([
         this.$('.sso-okta-app-id').slideUp(window.slideTime);
         this.$('.sso-okta-token').slideUp(window.slideTime);
         this.$('.sso-okta-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-saml-url').slideDown(window.slideTime);
@@ -346,6 +391,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -354,6 +401,9 @@ define([
         this.$('.sso-okta-app-id').slideUp(window.slideTime);
         this.$('.sso-okta-token').slideUp(window.slideTime);
         this.$('.sso-okta-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
@@ -374,6 +424,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -385,6 +437,9 @@ define([
         this.$('.sso-okta-app-id').slideUp(window.slideTime);
         this.$('.sso-okta-token').slideUp(window.slideTime);
         this.$('.sso-okta-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-saml-url').slideDown(window.slideTime);
@@ -394,10 +449,108 @@ define([
         this.$('.sso-onelogin-id').slideDown(window.slideTime);
         this.$('.sso-onelogin-secret').slideDown(window.slideTime);
         this.$('.sso-onelogin-mode').slideDown(window.slideTime);
+      } else if (mode === 'saml_jumpcloud') {
+        this.$('.sso-token').slideUp(window.slideTime);
+        this.$('.sso-secret').slideUp(window.slideTime);
+        this.$('.sso-host').slideUp(window.slideTime);
+        this.$('.sso-duo-mode').slideUp(window.slideTime);
+        this.$('.sso-match-slack').slideUp(window.slideTime);
+        this.$('.sso-match-google').slideUp(window.slideTime);
+        this.$('.sso-azure-directory-id').slideUp(window.slideTime);
+        this.$('.sso-azure-app-id').slideUp(window.slideTime);
+        this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
+        this.$('.sso-authzero-domain').slideUp(window.slideTime);
+        this.$('.sso-authzero-app-id').slideUp(window.slideTime);
+        this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
+        this.$('.sso-google-key').slideUp(window.slideTime);
+        this.$('.sso-google-email').slideUp(window.slideTime);
+        this.$('.sso-onelogin-app-id').slideUp(window.slideTime);
+        this.$('.sso-onelogin-id').slideUp(window.slideTime);
+        this.$('.sso-onelogin-secret').slideUp(window.slideTime);
+        this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-okta-app-id').slideUp(window.slideTime);
+        this.$('.sso-okta-token').slideUp(window.slideTime);
+        this.$('.sso-okta-mode').slideUp(window.slideTime);
+        this.$('.sso-radius-host').slideUp(window.slideTime);
+        this.$('.sso-radius-secret').slideUp(window.slideTime);
+        this.$('.sso-saml-url').slideDown(window.slideTime);
+        this.$('.sso-saml-issuer-url').slideDown(window.slideTime);
+        this.$('.sso-saml-cert').slideDown(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideDown(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideDown(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideDown(window.slideTime);
+      } else if (mode === 'saml_jumpcloud_duo') {
+        this.$('.sso-match-slack').slideUp(window.slideTime);
+        this.$('.sso-match-google').slideUp(window.slideTime);
+        this.$('.sso-azure-directory-id').slideUp(window.slideTime);
+        this.$('.sso-azure-app-id').slideUp(window.slideTime);
+        this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
+        this.$('.sso-authzero-domain').slideUp(window.slideTime);
+        this.$('.sso-authzero-app-id').slideUp(window.slideTime);
+        this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
+        this.$('.sso-google-key').slideUp(window.slideTime);
+        this.$('.sso-google-email').slideUp(window.slideTime);
+        this.$('.sso-okta-app-id').slideUp(window.slideTime);
+        this.$('.sso-okta-token').slideUp(window.slideTime);
+        this.$('.sso-okta-mode').slideUp(window.slideTime);
+        this.$('.sso-radius-host').slideUp(window.slideTime);
+        this.$('.sso-radius-secret').slideUp(window.slideTime);
+        this.$('.sso-onelogin-app-id').slideUp(window.slideTime);
+        this.$('.sso-onelogin-id').slideUp(window.slideTime);
+        this.$('.sso-onelogin-secret').slideUp(window.slideTime);
+        this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-token').slideDown(window.slideTime);
+        this.$('.sso-secret').slideDown(window.slideTime);
+        this.$('.sso-host').slideDown(window.slideTime);
+        this.$('.sso-duo-mode').slideDown(window.slideTime);
+        this.$('.sso-saml-url').slideDown(window.slideTime);
+        this.$('.sso-saml-issuer-url').slideDown(window.slideTime);
+        this.$('.sso-saml-cert').slideDown(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideDown(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideDown(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideDown(window.slideTime);
+      } else if (mode === 'saml_jumpcloud_yubico') {
+        this.$('.sso-token').slideUp(window.slideTime);
+        this.$('.sso-secret').slideUp(window.slideTime);
+        this.$('.sso-host').slideUp(window.slideTime);
+        this.$('.sso-azure-directory-id').slideUp(window.slideTime);
+        this.$('.sso-azure-app-id').slideUp(window.slideTime);
+        this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
+        this.$('.sso-authzero-domain').slideUp(window.slideTime);
+        this.$('.sso-authzero-app-id').slideUp(window.slideTime);
+        this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
+        this.$('.sso-duo-mode').slideUp(window.slideTime);
+        this.$('.sso-match-slack').slideUp(window.slideTime);
+        this.$('.sso-match-google').slideUp(window.slideTime);
+        this.$('.sso-google-key').slideUp(window.slideTime);
+        this.$('.sso-google-email').slideUp(window.slideTime);
+        this.$('.sso-onelogin-app-id').slideUp(window.slideTime);
+        this.$('.sso-onelogin-id').slideUp(window.slideTime);
+        this.$('.sso-onelogin-secret').slideUp(window.slideTime);
+        this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-okta-app-id').slideUp(window.slideTime);
+        this.$('.sso-okta-token').slideUp(window.slideTime);
+        this.$('.sso-okta-mode').slideUp(window.slideTime);
+        this.$('.sso-radius-host').slideUp(window.slideTime);
+        this.$('.sso-radius-secret').slideUp(window.slideTime);
+        this.$('.sso-saml-url').slideDown(window.slideTime);
+        this.$('.sso-saml-issuer-url').slideDown(window.slideTime);
+        this.$('.sso-saml-cert').slideDown(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideDown(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideDown(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideDown(window.slideTime);
       } else if (mode === 'slack') {
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -415,6 +568,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-google').slideUp(window.slideTime);
@@ -439,6 +595,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
@@ -448,10 +607,14 @@ define([
         this.$('.sso-azure-directory-id').slideDown(window.slideTime);
         this.$('.sso-azure-app-id').slideDown(window.slideTime);
         this.$('.sso-azure-app-secret').slideDown(window.slideTime);
+        this.$('.sso-azure-version').slideDown(window.slideTime);
+        this.$('.sso-azure-region').slideDown(window.slideTime);
       } else if (mode === 'authzero') {
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-saml-url').slideUp(window.slideTime);
         this.$('.sso-saml-issuer-url').slideUp(window.slideTime);
         this.$('.sso-saml-cert').slideUp(window.slideTime);
@@ -466,6 +629,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
@@ -482,6 +648,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -496,6 +664,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
@@ -506,6 +677,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -519,6 +692,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-google').slideUp(window.slideTime);
@@ -543,6 +719,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
@@ -552,6 +731,8 @@ define([
         this.$('.sso-azure-directory-id').slideDown(window.slideTime);
         this.$('.sso-azure-app-id').slideDown(window.slideTime);
         this.$('.sso-azure-app-secret').slideDown(window.slideTime);
+        this.$('.sso-azure-version').slideDown(window.slideTime);
+        this.$('.sso-azure-region').slideDown(window.slideTime);
         this.$('.sso-token').slideDown(window.slideTime);
         this.$('.sso-secret').slideDown(window.slideTime);
         this.$('.sso-host').slideDown(window.slideTime);
@@ -560,6 +741,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-saml-url').slideUp(window.slideTime);
         this.$('.sso-saml-issuer-url').slideUp(window.slideTime);
         this.$('.sso-saml-cert').slideUp(window.slideTime);
@@ -570,15 +753,18 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
         this.$('.sso-match-google').slideUp(window.slideTime);
         this.$('.sso-google-key').slideUp(window.slideTime);
         this.$('.sso-google-email').slideUp(window.slideTime);
-        this.$('.sso-azure-directory-id').slideDown(window.slideTime);
-        this.$('.sso-azure-app-id').slideDown(window.slideTime);
-        this.$('.sso-azure-app-secret').slideDown(window.slideTime);
+        this.$('.sso-authzero-domain').slideDown(window.slideTime);
+        this.$('.sso-authzero-app-id').slideDown(window.slideTime);
+        this.$('.sso-authzero-app-secret').slideDown(window.slideTime);
         this.$('.sso-token').slideDown(window.slideTime);
         this.$('.sso-secret').slideDown(window.slideTime);
         this.$('.sso-host').slideDown(window.slideTime);
@@ -587,6 +773,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -600,6 +788,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
@@ -614,6 +805,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -631,6 +824,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-google').slideUp(window.slideTime);
@@ -655,6 +851,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
@@ -664,10 +863,14 @@ define([
         this.$('.sso-azure-directory-id').slideDown(window.slideTime);
         this.$('.sso-azure-app-id').slideDown(window.slideTime);
         this.$('.sso-azure-app-secret').slideDown(window.slideTime);
+        this.$('.sso-azure-version').slideDown(window.slideTime);
+        this.$('.sso-azure-region').slideDown(window.slideTime);
       } else if (mode === 'authzero_yubico') {
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-saml-url').slideUp(window.slideTime);
         this.$('.sso-saml-issuer-url').slideUp(window.slideTime);
         this.$('.sso-saml-cert').slideUp(window.slideTime);
@@ -682,6 +885,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
@@ -695,6 +901,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -712,6 +920,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-radius-host').slideUp(window.slideTime);
         this.$('.sso-radius-secret').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
@@ -722,6 +933,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -735,6 +948,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
         this.$('.sso-match-google').slideUp(window.slideTime);
         this.$('.sso-google-key').slideUp(window.slideTime);
@@ -749,6 +965,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -766,6 +984,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
         this.$('.sso-match-google').slideUp(window.slideTime);
         this.$('.sso-google-key').slideUp(window.slideTime);
@@ -776,6 +997,8 @@ define([
         this.$('.sso-azure-directory-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-id').slideUp(window.slideTime);
         this.$('.sso-azure-app-secret').slideUp(window.slideTime);
+        this.$('.sso-azure-version').slideUp(window.slideTime);
+        this.$('.sso-azure-region').slideUp(window.slideTime);
         this.$('.sso-authzero-domain').slideUp(window.slideTime);
         this.$('.sso-authzero-app-id').slideUp(window.slideTime);
         this.$('.sso-authzero-app-secret').slideUp(window.slideTime);
@@ -789,6 +1012,9 @@ define([
         this.$('.sso-onelogin-id').slideUp(window.slideTime);
         this.$('.sso-onelogin-secret').slideUp(window.slideTime);
         this.$('.sso-onelogin-mode').slideUp(window.slideTime);
+        this.$('.sso-jumpcloudapp-id').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-secret').slideUp(window.slideTime);
+        this.$('.sso-jumpcloud-app-id').slideUp(window.slideTime);
         this.$('.sso-match-slack').slideUp(window.slideTime);
         this.$('.sso-match-google').slideUp(window.slideTime);
         this.$('.sso-google-key').slideUp(window.slideTime);
@@ -800,6 +1026,22 @@ define([
         this.$('.sso-host').slideDown(window.slideTime);
         this.$('.sso-duo-mode').slideDown(window.slideTime);
       }
+    },
+    getIpv6Select: function() {
+      return this.$('.ipv6 .selector').hasClass('selected');
+    },
+    setIpv6Select: function(state) {
+      if (state) {
+        this.$('.ipv6 .selector').addClass('selected');
+        this.$('.ipv6 .selector-inner').show();
+      }
+      else {
+        this.$('.ipv6 .selector').removeClass('selected');
+        this.$('.ipv6 .selector-inner').hide();
+      }
+    },
+    onIpv6Select: function() {
+      this.setIpv6Select(!this.getIpv6Select());
     },
     getSsoCacheSelect: function() {
       return this.$('.sso-cache .selector').hasClass('selected');
@@ -849,6 +1091,22 @@ define([
     onRestrictImportSelect: function() {
       this.setRestrictImportSelect(!this.getRestrictImportSelect());
     },
+    getRestrictClientSelect: function() {
+      return this.$('.restrict-client .selector').hasClass('selected');
+    },
+    setRestrictClientSelect: function(state) {
+      if (state) {
+        this.$('.restrict-client .selector').addClass('selected');
+        this.$('.restrict-client .selector-inner').show();
+      }
+      else {
+        this.$('.restrict-client .selector').removeClass('selected');
+        this.$('.restrict-client .selector-inner').hide();
+      }
+    },
+    onRestrictClientSelect: function() {
+      this.setRestrictClientSelect(!this.getRestrictClientSelect());
+    },
     getClientReconnect: function() {
       return this.$('.client-reconnect .selector').hasClass('selected');
     },
@@ -864,6 +1122,22 @@ define([
     },
     onClientReconnect: function() {
       this.setClientReconnect(!this.getClientReconnect());
+    },
+    getDropPermissions: function() {
+      return this.$('.drop-permissions .selector').hasClass('selected');
+    },
+    setDropPermissions: function(state) {
+      if (state) {
+        this.$('.drop-permissions .selector').addClass('selected');
+        this.$('.drop-permissions .selector-inner').show();
+      }
+      else {
+        this.$('.drop-permissions .selector').removeClass('selected');
+        this.$('.drop-permissions .selector-inner').hide();
+      }
+    },
+    onDropPermissions: function() {
+      this.setDropPermissions(!this.getDropPermissions());
     },
     onSsoMode: function() {
       this.setSsoMode(this.getSsoMode());
@@ -884,10 +1158,16 @@ define([
     },
     onMonitoringChange: function() {
       if (this.$('.monitoring select').val() === 'influxdb') {
-        this.$('.influxdb-uri').slideDown(window.slideTime);
+        this.$('.influxdb-url').slideDown(window.slideTime);
+        this.$('.influxdb-org').slideDown(window.slideTime);
+        this.$('.influxdb-bucket').slideDown(window.slideTime);
+        this.$('.influxdb-token').slideDown(window.slideTime);
       }
       else {
-        this.$('.influxdb-uri').slideUp(window.slideTime);
+        this.$('.influxdb-url').slideUp(window.slideTime);
+        this.$('.influxdb-org').slideUp(window.slideTime);
+        this.$('.influxdb-bucket').slideUp(window.slideTime);
+        this.$('.influxdb-token').slideUp(window.slideTime);
       }
     },
     onThemeChange: function() {
@@ -931,10 +1211,14 @@ define([
       var serverPort = this.$('.server-port input').val();
       var acmeDomain = this.$('.acme-domain input').val() || null;
       var monitoring = this.$('.monitoring select').val();
-      var influxdbUriKey = this.$('.influxdb-uri input').val();
+      var influxdbUrl = this.$('.influxdb-url input').val();
+      var influxdbOrg = this.$('.influxdb-org input').val();
+      var influxdbBucket = this.$('.influxdb-bucket input').val();
+      var influxdbToken = this.$('.influxdb-token input').val();
       var publicAddress = this.$('.public-address input').val();
       var publicAddress6 = this.$('.public-address6 input').val();
       var routedSubnet6 = this.$('.routed-subnet6 input').val();
+      var routedSubnet6Wg = this.$('.routed-subnet6-wg input').val();
       var reverseProxy = this.$('.reverse-proxy select').val();
       var theme = this.$('.theme:visible select').val();
       var emailFrom = this.$('.email-from input').val();
@@ -948,9 +1232,12 @@ define([
       var ssoYubicoClient = this.$('.sso-yubico-client input').val();
       var ssoYubicoSecret = this.$('.sso-yubico-secret input').val();
       var clientReconnect = this.getClientReconnect();
+      var dropPermissions = this.getDropPermissions();
+      var ipv6 = this.getIpv6Select();
       var ssoCache = this.getSsoCacheSelect();
       var ssoClientCache = this.getSsoClientCacheSelect();
       var restrictImport = this.getRestrictImportSelect();
+      var restrictClient = this.getRestrictClientSelect();
       var oracleUserOcid = this.$(
         '.oracle-user-ocid input').val();
       var oraclePublicKey = this.$(
@@ -1027,6 +1314,10 @@ define([
         '.ap-southeast-2-access-key input').val();
       var apSoutheast2SecretKey = this.$(
         '.ap-southeast-2-secret-key input').val();
+      var apSoutheast3AccessKey = this.$(
+        '.ap-southeast-3-access-key input').val();
+      var apSoutheast3SecretKey = this.$(
+        '.ap-southeast-3-secret-key input').val();
       var apEast1AccessKey = this.$(
         '.ap-east-1-access-key input').val();
       var apEast1SecretKey = this.$(
@@ -1069,6 +1360,8 @@ define([
       var ssoAzureDirectoryId = null;
       var ssoAzureAppId = null;
       var ssoAzureAppSecret = null;
+      var ssoAzureRegion = null;
+      var ssoAzureVersion = null;
       var ssoAuthzeroDomain = null;
       var ssoAuthzeroAppId = null;
       var ssoAuthzeroAppSecret = null;
@@ -1084,12 +1377,15 @@ define([
       var ssoOneLoginId = null;
       var ssoOneLoginSecret = null;
       var ssoOneLoginMode = null;
+      var ssoJumpCloudAppId = null;
+      var ssoJumpCloudSecret = null;
       var ssoRadiusHost = null;
       var ssoRadiusSecret = null;
       var ssoDuoToken = null;
       var ssoDuoSecret = null;
       var ssoDuoHost = null;
       var ssoDuoMode = null;
+      var serverSsoUrl = null;
 
       if (this.$('.verify-pass input').is(':visible') &&
           password && password !== verifyPassword) {
@@ -1106,7 +1402,10 @@ define([
       }
 
       if (monitoring !== 'influxdb') {
-        influxdbUriKey = null;
+        influxdbUrl = null;
+        influxdbOrg = null;
+        influxdbBucket = null;
+        influxdbToken = null;
       }
 
       if (sso) {
@@ -1136,11 +1435,23 @@ define([
           ssoOneLoginMode = this.$('.sso-onelogin-mode select').val();
         }
 
+        if (sso.indexOf('jumpcloud') !== -1) {
+          ssoJumpCloudAppId = this.$('.sso-jumpcloud-app-id input').val();
+          ssoJumpCloudSecret = this.$('.sso-jumpcloud-secret input').val();
+        }
+
         if (sso.indexOf('azure') !== -1) {
           ssoAzureDirectoryId = this.$(
             '.sso-azure-directory-id input').val();
           ssoAzureAppId = this.$('.sso-azure-app-id input').val();
           ssoAzureAppSecret = this.$('.sso-azure-app-secret input').val();
+          ssoAzureRegion = this.$('.sso-azure-region select').val();
+          ssoAzureVersion = this.$('.sso-azure-version select').val();
+          if (ssoAzureVersion) {
+            ssoAzureVersion = parseInt(ssoAzureVersion, 10);
+          } else {
+            ssoAzureVersion = 2;
+          }
         }
 
         if (sso.indexOf('authzero') !== -1) {
@@ -1182,13 +1493,18 @@ define([
         }
 
         ssoOrg = this.$('.sso-org select').val();
+
+        serverSsoUrl = this.$('.server-sso-url input').val();
       }
 
       var modelAttr = {
         username: username,
         auditing: auditing,
         monitoring: monitoring,
-        influxdb_uri: influxdbUriKey,
+        influxdb_url: influxdbUrl,
+        influxdb_org: influxdbOrg,
+        influxdb_bucket: influxdbBucket,
+        influxdb_token: influxdbToken,
         email_from: emailFrom,
         email_server: emailServer,
         email_username: emailUsername,
@@ -1204,8 +1520,10 @@ define([
         sso_yubico_secret: ssoYubicoSecret,
         sso_org: ssoOrg,
         sso_azure_directory_id: ssoAzureDirectoryId,
+        sso_azure_region: ssoAzureRegion,
         sso_azure_app_id: ssoAzureAppId,
         sso_azure_app_secret: ssoAzureAppSecret,
+        sso_azure_version: ssoAzureVersion,
         sso_authzero_domain: ssoAuthzeroDomain,
         sso_authzero_app_id: ssoAuthzeroAppId,
         sso_authzero_app_secret: ssoAuthzeroAppSecret,
@@ -1221,15 +1539,22 @@ define([
         sso_onelogin_id: ssoOneLoginId,
         sso_onelogin_secret: ssoOneLoginSecret,
         sso_onelogin_mode: ssoOneLoginMode,
+        sso_jumpcloud_app_id: ssoJumpCloudAppId,
+        sso_jumpcloud_secret: ssoJumpCloudSecret,
         sso_radius_host: ssoRadiusHost,
         sso_radius_secret: ssoRadiusSecret,
+        server_sso_url: serverSsoUrl,
+        ipv6: ipv6,
         sso_cache: ssoCache,
         sso_client_cache: ssoClientCache,
         restrict_import: restrictImport,
+        restrict_client: restrictClient,
         client_reconnect: clientReconnect,
+        drop_permissions: dropPermissions,
         public_address: publicAddress,
         public_address6: publicAddress6,
         routed_subnet6: routedSubnet6,
+        routed_subnet6_wg: routedSubnet6Wg,
         reverse_proxy: reverseProxy,
         theme: theme,
         server_port: serverPort,
@@ -1277,6 +1602,8 @@ define([
         ap_southeast_1_secret_key: apSoutheast1SecretKey,
         ap_southeast_2_access_key: apSoutheast2AccessKey,
         ap_southeast_2_secret_key: apSoutheast2SecretKey,
+        ap_southeast_3_access_key: apSoutheast3AccessKey,
+        ap_southeast_3_secret_key: apSoutheast3SecretKey,
         ap_east_1_access_key: apEast1AccessKey,
         ap_east_1_secret_key: apEast1SecretKey,
         ap_south_1_access_key: apSouth1AccessKey,

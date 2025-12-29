@@ -7,6 +7,7 @@ from pritunl import utils
 from pritunl import mongo
 from pritunl import link
 from pritunl import event
+from pritunl import database
 
 import pymongo
 import flask
@@ -15,6 +16,7 @@ import hmac
 import hashlib
 import json
 import os
+import random
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import (
     Cipher, algorithms, modes
@@ -63,15 +65,38 @@ def link_post():
     type = DIRECT if flask.request.json.get('type') == DIRECT \
         else SITE_TO_SITE
     ipv6 = True if flask.request.json.get('ipv6') else False
+
+    if flask.request.json.get('protocol') == 'wg':
+        protocol = 'wg'
+    else:
+        protocol = 'ipsec'
+
+    wg_port = flask.request.json.get('wg_port')
+    if not wg_port or wg_port < 1 or wg_port > 65535:
+        wg_port = random.randint(30000, 32500)
+
+    host_check = True if flask.request.json.get('host_check') else False
     action = RESTART if flask.request.json.get(
         'action') == RESTART else HOLD
+    preferred_ike = utils.filter_str2(
+        flask.request.json.get('preferred_ike')) or None
+    preferred_esp = utils.filter_str2(
+        flask.request.json.get('preferred_esp')) or None
+    force_preferred = True if flask.request.json.get(
+        'force_preferred') else False
 
     lnk = link.Link(
         name=name,
         type=type,
         status=ONLINE,
         ipv6=ipv6,
+        protocol=protocol,
+        wg_port=wg_port,
+        host_check=host_check,
         action=action,
+        preferred_ike=preferred_ike,
+        preferred_esp=preferred_esp,
+        force_preferred=force_preferred,
     )
 
     lnk.generate_key()
@@ -148,10 +173,30 @@ def link_put(link_id):
 
     lnk.ipv6 = True if flask.request.json.get('ipv6') else False
 
+    if flask.request.json.get('protocol') == 'wg':
+        lnk.protocol = 'wg'
+    else:
+        lnk.protocol = 'ipsec'
+
+    lnk.wg_port = flask.request.json.get('wg_port')
+    if not lnk.wg_port or lnk.wg_port < 1 or lnk.wg_port > 65535:
+        lnk.wg_port = random.randint(30000, 32500)
+
+    lnk.host_check = True if flask.request.json.get('host_check') else False
+
     lnk.action = RESTART if flask.request.json.get(
         'action') == RESTART else HOLD
 
-    lnk.commit(('name', 'status', 'key', 'ipv6', 'action'))
+    lnk.preferred_ike = utils.filter_str2(
+        flask.request.json.get('preferred_ike')) or None
+    lnk.preferred_esp = utils.filter_str2(
+        flask.request.json.get('preferred_esp')) or None
+    lnk.force_preferred = True if flask.request.json.get(
+        'force_preferred') else False
+
+    lnk.commit(('name', 'status', 'key', 'ipv6', 'protocol', 'wg_port',
+        'host_check', 'action', 'preferred_ike', 'preferred_esp',
+        'force_preferred'))
 
     event.Event(type=LINKS_UPDATED)
 
@@ -173,9 +218,19 @@ def link_location_get(link_id):
     if not lnk:
         return flask.abort(404)
 
+    hosts_map = {}
     locations = []
     for location_dict in lnk.iter_locations_dict():
+        for host in location_dict['hosts']:
+            hosts_map[str(host['id'])] = '%s - %s' % (
+                location_dict['name'], host['name'])
         locations.append(location_dict)
+
+    for location in locations:
+        for host in location['hosts']:
+            if host.get('hosts'):
+                for host_id, host_status in host['hosts'].items():
+                    host_status['name'] = hosts_map.get(host_id) or host_id
 
     if settings.app.demo_mode:
         utils.demo_set_cache(locations)
@@ -342,11 +397,14 @@ def link_location_host_post(link_id, location_id):
     name = utils.filter_str(flask.request.json.get('name')) or 'undefined'
     timeout = int(flask.request.json.get('timeout') or 0) or None
     priority = abs(int(flask.request.json.get('priority') or 1)) or 1
+    backoff = int(flask.request.json.get('backoff') or 0) or None
     static = bool(flask.request.json.get('static'))
     public_address = utils.filter_str(
         flask.request.json.get('public_address'))
     local_address = utils.filter_str(
         flask.request.json.get('local_address'))
+    wg_public_key = utils.filter_base64(
+        flask.request.json.get('wg_public_key'))
 
     hst = link.Host(
         link=lnk,
@@ -356,9 +414,11 @@ def link_location_host_post(link_id, location_id):
         name=name,
         timeout=timeout,
         priority=priority,
+        backoff=backoff,
         static=static,
         public_address=public_address,
         local_address=local_address,
+        wg_public_key=wg_public_key,
     )
 
     hst.generate_secret()
@@ -452,13 +512,14 @@ def link_location_host_put(link_id, location_id, host_id):
     hst.name = utils.filter_str(flask.request.json.get('name')) or 'undefined'
     hst.timeout = abs(int(flask.request.json.get('timeout') or 0)) or None
     hst.priority = abs(int(flask.request.json.get('priority') or 1)) or 1
+    hst.backoff = abs(int(flask.request.json.get('backoff') or 0)) or None
     hst.static = bool(flask.request.json.get('static'))
     hst.public_address = utils.filter_str(
         flask.request.json.get('public_address'))
     hst.local_address = utils.filter_str(
         flask.request.json.get('local_address'))
 
-    hst.commit(('name', 'timeout', 'priority', 'static',
+    hst.commit(('name', 'timeout', 'priority', 'backoff', 'static',
         'public_address', 'local_address'))
 
     event.Event(type=LINKS_UPDATED)
@@ -513,7 +574,7 @@ def link_location_peer_post(link_id, location_id):
     if not loc:
         return flask.abort(404)
 
-    peer_id = utils.ObjectId(flask.request.json.get('peer_id'))
+    peer_id = database.ParseObjectId(flask.request.json.get('peer_id'))
     loc.remove_exclude(peer_id)
 
     lnk.commit('excludes')
@@ -570,7 +631,7 @@ def link_location_transit_post(link_id, location_id):
     if not loc:
         return flask.abort(404)
 
-    transit_id = utils.ObjectId(flask.request.json.get('transit_id'))
+    transit_id = database.ParseObjectId(flask.request.json.get('transit_id'))
     loc.add_transit(transit_id)
 
     loc.commit('transits')
@@ -619,7 +680,10 @@ def link_state_put():
     if not auth_token or not auth_timestamp or not auth_nonce or \
             not auth_signature:
         return flask.abort(406)
+    auth_token = auth_token[:256]
+    auth_timestamp = auth_timestamp[:64]
     auth_nonce = auth_nonce[:32]
+    auth_signature = auth_signature[:512]
 
     try:
         if abs(int(auth_timestamp) - int(utils.time_now())) > \
@@ -628,7 +692,7 @@ def link_state_put():
     except ValueError:
         return flask.abort(405)
 
-    host = link.get_host(utils.ObjectId(auth_token))
+    host = link.get_host(database.ObjectId(auth_token))
     if not host:
         return flask.abort(404)
 
@@ -643,15 +707,18 @@ def link_state_put():
     if len(auth_string) > AUTH_SIG_STRING_MAX_LEN:
         return flask.abort(413)
 
+    if not host.secret:
+        raise ValueError('Host secret undefined')
+
     auth_test_signature = base64.b64encode(hmac.new(
-        host.secret.encode(), auth_string,
-        hashlib.sha512).digest())
+        host.secret.encode(), auth_string.encode(),
+        hashlib.sha512).digest()).decode()
     if not utils.const_compare(auth_signature, auth_test_signature):
         return flask.abort(401)
 
     nonces_collection = mongo.get_collection('auth_nonces')
     try:
-        nonces_collection.insert({
+        nonces_collection.insert_one({
             'token': auth_token,
             'nonce': auth_nonce,
             'timestamp': utils.now(),
@@ -661,10 +728,34 @@ def link_state_put():
 
     host.load_link()
 
+    req_timestamp = flask.request.json.get('timestamp') or int(auth_timestamp)
     host.version = flask.request.json.get('version')
     host.public_address = flask.request.json.get('public_address')
     host.local_address = flask.request.json.get('local_address')
     host.address6 = flask.request.json.get('address6')
+    host.wg_public_key = flask.request.json.get('wg_public_key')
+    if flask.request.json.get('hosts'):
+        host.hosts = flask.request.json.get('hosts')
+
+        processed = False
+        if host.hosts_hist_timestamp:
+            if req_timestamp in host.hosts_hist_timestamp:
+                processed = True
+            else:
+                host.hosts_hist_timestamp.insert(0, req_timestamp)
+                host.hosts_hist_timestamp = host.hosts_hist_timestamp[:6]
+        else:
+            host.hosts_hist_timestamp = [req_timestamp]
+
+        if not processed:
+            if host.hosts_hist:
+                host.hosts_hist.insert(0, flask.request.json.get('hosts'))
+                host.hosts_hist = host.hosts_hist[:6]
+            else:
+                host.hosts_hist = [flask.request.json.get('hosts')]
+    else:
+        host.hosts = None
+        host.hosts_hist = None
 
     state, active = host.get_state()
     if active:
@@ -675,23 +766,24 @@ def link_state_put():
     data += (16 - len(data) % 16) * '\x00'
 
     iv = os.urandom(16)
-    key = hashlib.sha256(host.secret).digest()
+    key = hashlib.sha256(host.secret.encode()).digest()
     cipher = Cipher(
         algorithms.AES(key),
         modes.CBC(iv),
         backend=default_backend()
     ).encryptor()
-    enc_data = base64.b64encode(cipher.update(data) + cipher.finalize())
+    enc_data = base64.b64encode(cipher.update(
+        data.encode()) + cipher.finalize())
 
     enc_signature = base64.b64encode(hmac.new(
         host.secret.encode(), enc_data,
-        hashlib.sha512).digest())
+        hashlib.sha512).digest()).decode()
 
     resp = flask.Response(response=enc_data, mimetype='application/base64')
     resp.headers.add('Cache-Control', 'no-cache, no-store, must-revalidate')
     resp.headers.add('Pragma', 'no-cache')
     resp.headers.add('Expires', 0)
-    resp.headers.add('Cipher-IV', base64.b64encode(iv))
+    resp.headers.add('Cipher-IV', base64.b64encode(iv).decode())
     resp.headers.add('Cipher-Signature', enc_signature)
 
     return resp
@@ -709,7 +801,10 @@ def link_state_delete():
     if not auth_token or not auth_timestamp or not auth_nonce or \
             not auth_signature:
         return flask.abort(406)
+    auth_token = auth_token[:256]
+    auth_timestamp = auth_timestamp[:64]
     auth_nonce = auth_nonce[:32]
+    auth_signature = auth_signature[:512]
 
     try:
         if abs(int(auth_timestamp) - int(utils.time_now())) > \
@@ -718,7 +813,7 @@ def link_state_delete():
     except ValueError:
         return flask.abort(405)
 
-    host = link.get_host(utils.ObjectId(auth_token))
+    host = link.get_host(database.ObjectId(auth_token))
     if not host:
         return flask.abort(404)
 
@@ -734,14 +829,14 @@ def link_state_delete():
         return flask.abort(413)
 
     auth_test_signature = base64.b64encode(hmac.new(
-        host.secret.encode(), auth_string,
-        hashlib.sha512).digest())
+        host.secret.encode(), auth_string.encode(),
+        hashlib.sha512).digest()).decode()
     if not utils.const_compare(auth_signature, auth_test_signature):
         return flask.abort(401)
 
     nonces_collection = mongo.get_collection('auth_nonces')
     try:
-        nonces_collection.insert({
+        nonces_collection.insert_one({
             'token': auth_token,
             'nonce': auth_nonce,
             'timestamp': utils.now(),

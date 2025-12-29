@@ -163,6 +163,7 @@ define([
     getOptions: function() {
       if (this.collection.getSearch()) {
         var options = {
+          'last_active': this.collection.getSort(),
           'search': this.collection.getSearch()
         };
         if (this.collection.getSearchLimit()) {
@@ -172,6 +173,7 @@ define([
       }
       else {
         return {
+          'last_active': this.collection.getSort(),
           'page': this.collection.getPage()
         };
       }
@@ -208,6 +210,10 @@ define([
     },
     searchMore: function() {
       this.collection.setSearchLimit(this.collection.getSearchLimit() * 2);
+      this.update();
+    },
+    toggleSort: function() {
+      this.collection.toggleSort();
       this.update();
     }
   });

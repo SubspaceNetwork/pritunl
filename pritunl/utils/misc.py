@@ -17,13 +17,14 @@ import sys
 import pymongo
 import hashlib
 import base64
+import hmac
 import re
-import Queue
-import urllib2
+import queue
+import urllib.request, urllib.error, urllib.parse
 import json
 import math
 import psutil
-import urlparse
+import urllib.parse
 
 _null = open(os.devnull, 'w')
 
@@ -35,32 +36,8 @@ else:
     _srcfile = __file__
 _srcfile = os.path.normcase(_srcfile)
 
-PyQueue = Queue.Queue
-PyPriorityQueue = Queue.PriorityQueue
-
-def ObjectId(oid=None):
-    if oid is not None:
-        oid = str(oid)
-    if oid is None or len(oid) != 32:
-        try:
-            return bson.ObjectId(oid)
-        except:
-            from pritunl import logger
-            logger.exception('Failed to convert object id', 'utils',
-                object_id=oid,
-            )
-    return oid
-
-def ObjectIdSilent(oid=None):
-    if oid is not None:
-        oid = str(oid)
-    if oid is None or len(oid) != 32:
-        return bson.ObjectId(oid)
-    return oid
-
-def ParseObjectId(oid):
-    if oid:
-        return bson.ObjectId(str(oid))
+PyQueue = queue.Queue
+PyPriorityQueue = queue.PriorityQueue
 
 def _now(ntp_time):
     start_time, sync_time = ntp_time
@@ -71,6 +48,9 @@ def now():
 
 def time_now():
     return time.time()
+
+def time_diff(timestamp, ttl):
+    return abs(now().timestamp() - timestamp.timestamp()) < ttl
 
 def sync_time():
     pass
@@ -140,26 +120,28 @@ def set_db_ver(version, version_min=None):
         )
 
     update_doc = {
-        'version': version,
+        '$set': {
+            'version': version,
+        },
     }
     if version_min:
-        update_doc['version_min'] = version_min
+        update_doc['$set']['version_min'] = version_min
 
     prefix = settings.conf.mongodb_collection_prefix or ''
     client = pymongo.MongoClient(settings.conf.mongodb_uri,
         connectTimeoutMS=MONGO_CONNECT_TIMEOUT)
     database = client.get_default_database()
 
-    db_collections = database.collection_names()
+    db_collections = database.list_collection_names()
     if 'authorities' in db_collections:
         raise TypeError('Cannot connect to a Pritunl Zero database')
 
     settings_db = getattr(database, prefix + 'settings')
-    doc = settings_db.update({
+    settings_db.update_one({
         '_id': 'version',
     }, update_doc, upsert=True)
 
-    return doc.get('version')
+    return version
 
 def check_output(*args, **kwargs):
     if 'stdout' in kwargs or 'stderr' in kwargs:
@@ -175,6 +157,9 @@ def check_output(*args, **kwargs):
 
     stdoutdata, stderrdata = process.communicate()
     return_code = process.poll()
+
+    stdoutdata = stdoutdata.decode()
+    stderrdata = stderrdata.decode()
 
     if return_code:
         cmd = kwargs.get('args', args[0])
@@ -198,11 +183,27 @@ def check_output_logged(*args, **kwargs):
     except KeyError:
         ignore_states = None
 
-    process = subprocess.Popen(stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    try:
+        com_input = kwargs.pop('input')
+        stdin = subprocess.PIPE
+    except KeyError:
+        com_input = None
+        stdin = None
+
+    process = subprocess.Popen(
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        stdin=stdin,
         *args, **kwargs)
 
-    stdoutdata, stderrdata = process.communicate()
+    if com_input:
+        com_input = com_input.encode()
+
+    stdoutdata, stderrdata = process.communicate(input=com_input)
     return_code = process.poll()
+
+    stdoutdata = stdoutdata.decode()
+    stderrdata = stderrdata.decode()
 
     if return_code:
         from pritunl import logger
@@ -260,7 +261,7 @@ def find_caller():
     return rv
 
 def rmtree(path):
-    for i in xrange(8):
+    for i in range(8):
         try:
             check_output_logged(['rm', '-rf', path])
             return
@@ -279,33 +280,60 @@ def filter_str(in_str):
         return in_str
     return ''.join(x for x in in_str if x.isalnum() or x in NAME_SAFE_CHARS)
 
+def filter_base64(in_str):
+    if in_str is not None:
+        in_str = str(in_str)
+    if not in_str:
+        return in_str
+    return ''.join(x for x in in_str if x.isalnum() or x in BASE64_SAFE_CHARS)
+
 def filter_unicode(in_str):
     if not in_str:
         return in_str
     return ''.join(x for x in in_str if x.isalnum() or x in NAME_SAFE_CHARS)
+
+def filter_str2(in_str):
+    if in_str is not None:
+        in_str = str(in_str)
+    if not in_str:
+        return in_str
+    return ''.join(x for x in in_str if x.isalnum() or x in NAME_SAFE_CHARS2)
+
+def filter_path(in_str):
+    if in_str is not None:
+        in_str = str(in_str)
+    if not in_str:
+        return in_str
+    return ''.join(x for x in in_str if x.isalnum() or x in PATH_SAFE_CHARS)
 
 def generate_secret():
     return generate_secret_len(32)
 
 def generate_secret_len(n):
     l = int(n*1.3)
-    for i in xrange(10):
-        x = re.sub(r'[\W_]+', '', base64.b64encode(os.urandom(l)))[:n]
+    for i in range(10):
+        x = re.sub(r'[\W_]+', '', base64.b64encode(
+            os.urandom(l)).decode())[:n]
         if len(x) == n:
             return x
     raise ValueError('Failed to generate secret')
+
+def generate_random_mac():
+    random_digits = [random.choice('0123456789ABCDEF') for _ in range(10)]
+    return '02:' + ':'.join(
+        [''.join(random_digits[i:i+2]) for i in range(0, 10, 2)])
 
 def generate_otp_secret():
     sha_hash = hashlib.sha512()
     sha_hash.update(os.urandom(8192))
     byte_hash = sha_hash.digest()
 
-    for _ in xrange(6):
+    for _ in range(6):
         sha_hash = hashlib.sha512()
         sha_hash.update(byte_hash)
         byte_hash = sha_hash.digest()
 
-    return base64.b32encode(byte_hash)[:settings.user.otp_secret_len]
+    return base64.b32encode(byte_hash).decode()[:settings.user.otp_secret_len]
 
 def get_cert_block(cert_data):
     start_index = cert_data.index('-----BEGIN CERTIFICATE-----')
@@ -313,6 +341,9 @@ def get_cert_block(cert_data):
     return cert_data[start_index:end_index]
 
 def get_temp_path():
+    if not os.path.isdir(settings.conf.temp_path):
+        os.makedirs(settings.conf.temp_path)
+
     return os.path.join(settings.conf.temp_path, uuid.uuid4().hex)
 
 def check_openssl():
@@ -330,7 +361,7 @@ def check_iptables_wait():
 def roundrobin(*iterables):
     # Recipe credited to George Sakkis
     pending = len(iterables)
-    nexts = itertools.cycle(iter(it).next for it in iterables)
+    nexts = itertools.cycle(iter(it).__next__ for it in iterables)
     while pending:
         try:
             for next in nexts:
@@ -340,22 +371,21 @@ def roundrobin(*iterables):
             nexts = itertools.cycle(itertools.islice(nexts, pending))
 
 def random_name():
-    return '%s-%s-%s' % (
-        random.choice(RANDOM_ONE),
-        random.choice(RANDOM_TWO),
+    return '%s-%s' % (
+        random.choice(RANDOM_ELEM),
         random.randint(1000, 9999),
     )
 
 def stop_process(process):
     terminated = False
 
-    for _ in xrange(100):
+    for _ in range(100):
         try:
             process.send_signal(signal.SIGINT)
         except OSError as error:
             if error.errno != 3:
                 raise
-        for _ in xrange(4):
+        for _ in range(4):
             if process.poll() is not None:
                 terminated = True
                 break
@@ -364,7 +394,7 @@ def stop_process(process):
             break
 
     if not terminated:
-        for _ in xrange(10):
+        for _ in range(10):
             if process.poll() is not None:
                 terminated = True
                 break
@@ -378,12 +408,7 @@ def stop_process(process):
     return terminated
 
 def const_compare(x, y):
-    if len(x) != len(y):
-        return False
-    result = 0
-    for x, y in zip(x, y):
-        result |= ord(x) ^ ord(y)
-    return result == 0
+    return hmac.compare_digest(x, y)
 
 def response(data=None, status_code=None):
     response = flask.Response(response=data,
@@ -411,14 +436,16 @@ def styles_response(etag, last_modified, data):
 
 def rand_str(length):
     s = re.sub(r'[\W_]+', '', base64.b64encode(
-        os.urandom(int(length * 1.5))))[:length]
+        os.urandom(int(
+            length * (1.5 if length > 10 else 2)))).decode())[:length]
     if len(s) != length:
         return rand_str(length)
     return s
 
 def rand_str_ne(length):
-    s = re.sub(r'[\W_lIO0]+', '', base64.b64encode(
-        os.urandom(int(length * 1.5))))[:length]
+    s = re.sub(r'[\W_1lLiIoO0]+', '', base64.b64encode(
+        os.urandom(int(
+            length * (2 if length > 10 else 3)))).decode())[:length]
     if len(s) != length:
         return rand_str(length)
     return s
@@ -442,10 +469,16 @@ def fnv64a(s):
         hval = (hval * prime64) % uint64_max
     return hval
 
+def base64raw_decode(data):
+    return base64.b64decode(data.encode() + b'=' * (-len(data) % 4))
+
+def base64raw_encode(data):
+    return base64.b64encode(data).strip(b'=').decode('utf8')
+
 def sync_public_ip(attempts=1, timeout=5):
     from pritunl import logger
 
-    for i in xrange(attempts):
+    for i in range(attempts):
         url = settings.app.public_ip_server
         if settings.app.dedicated:
             url = settings.app.dedicated + '/ip'
@@ -454,9 +487,9 @@ def sync_public_ip(attempts=1, timeout=5):
             time.sleep(3)
             logger.info('Retrying get public ip address', 'utils')
         try:
-            request = urllib2.Request(url)
+            request = urllib.request.Request(url)
             request.add_header('User-Agent', 'pritunl')
-            response = urllib2.urlopen(request, timeout=timeout)
+            response = urllib.request.urlopen(request, timeout=timeout)
             settings.local.public_ip = str(json.load(response)['ip'])
             break
         except:
@@ -464,10 +497,10 @@ def sync_public_ip(attempts=1, timeout=5):
 
     if not settings.app.dedicated:
         try:
-            request = urllib2.Request(
+            request = urllib.request.Request(
                 settings.app.public_ip6_server)
             request.add_header('User-Agent', 'pritunl')
-            response = urllib2.urlopen(request, timeout=timeout)
+            response = urllib.request.urlopen(request, timeout=timeout)
             settings.local.public_ip6 = str(json.load(response)['ip'])
         except:
             pass
@@ -490,7 +523,7 @@ def get_process_cpu_mem():
     return proc.cpu_percent(interval=0.5), proc.memory_percent()
 
 def redirect(location, code=302):
-    location = urlparse.urljoin(get_url_root(), location)
+    location = urllib.parse.urljoin(get_url_root(), location)
     return flask.redirect(location, code)
 
 def get_url_root():
@@ -507,7 +540,8 @@ def check_openvpn_ver():
         process = subprocess.Popen(['openvpn', '--version'],
             stdout=subprocess.PIPE)
         output, _ = process.communicate()
-        output = output.split()[1].strip()
+        output = output.decode().split()[1].strip()
+        output = output.split('_')[0]
 
         version = [int(x) for x in output.split('.')]
 
@@ -523,4 +557,37 @@ def check_openvpn_ver():
         from pritunl import logger
         logger.exception('Failed to check openvpn version', 'utils')
 
+    return False
+
+def systemd_available():
+    for proc in psutil.process_iter():
+        if proc.name() == 'systemd':
+            return True
+    return False
+
+def systemd_start(service):
+    check_output_logged([
+        'systemctl', 'restart', service,
+    ])
+
+def systemd_stop(service):
+    check_output_logged([
+        'systemctl', 'stop', service,
+    ])
+
+def systemd_stop_silent(service):
+    check_call_silent([
+        'systemctl', 'stop', service,
+    ])
+
+def systemd_reload():
+    check_output_logged([
+        'systemctl', 'daemon-reload',
+    ])
+
+def systemd_is_active(service):
+    process = subprocess.Popen(['systemctl', 'is-active', '--quiet', service])
+    return_code = process.wait()
+    if return_code == 0:
+        return True
     return False

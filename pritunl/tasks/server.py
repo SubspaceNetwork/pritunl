@@ -52,7 +52,7 @@ class TaskServer(task.Task):
                             ping_timestamp=instance['ping_timestamp'],
                         )
 
-                        self.server_collection.update({
+                        self.server_collection.update_one({
                             '_id': doc['_id'],
                             'instances.instance_id': instance['instance_id'],
                         }, {
@@ -143,7 +143,7 @@ class TaskServer(task.Task):
                         new_availability_group=group_best,
                     )
 
-                    self.server_collection.update({
+                    self.server_collection.update_one({
                         '_id': doc['_id'],
                         'status': ONLINE,
                     }, {'$set': {
@@ -187,4 +187,4 @@ class TaskServer(task.Task):
         except:
             logger.exception('Error checking server states', 'tasks')
 
-task.add_task(TaskServer, seconds=xrange(0, 60, settings.vpn.server_ping))
+task.add_task(TaskServer, seconds=range(0, 60, settings.vpn.server_ping))

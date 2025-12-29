@@ -5,7 +5,6 @@ from pritunl.server.server import Server, dict_fields
 
 from pritunl.constants import *
 from pritunl.exceptions import *
-from pritunl import transaction
 from pritunl import mongo
 from pritunl import ipaddress
 from pritunl import settings
@@ -24,10 +23,10 @@ def get_dict(id):
     return Server(id=id, fields=dict_fields).dict()
 
 def get_online_ipv6_count():
-    return Server.collection.find({
+    return Server.collection.count_documents({
         'status': ONLINE,
         'ipv6': True,
-    }).count()
+    })
 
 def get_used_resources(ignore_server_id):
     response = Server.collection.aggregate(([
@@ -37,17 +36,24 @@ def get_used_resources(ignore_server_id):
     ] if ignore_server_id else []) + [
         {'$project': {
             'network': True,
+            'network_wg': True,
             'interface': True,
             'port_protocol': {'$concat': [
                 {'$substr': ['$port', 0, 5]},
                 '$protocol',
             ]},
+            'port_protocol_wg': {'$concat': [
+                {'$substr': ['$port_wg', 0, 5]},
+                'udp',
+            ]},
         }},
         {'$group': {
             '_id': None,
             'networks': {'$addToSet': '$network'},
+            'networks_wg': {'$addToSet': '$network_wg'},
             'interfaces': {'$addToSet': '$interface'},
             'ports': {'$addToSet': '$port_protocol'},
+            'ports_wg': {'$addToSet': '$port_protocol_wg'},
         }},
     ])
 
@@ -60,15 +66,28 @@ def get_used_resources(ignore_server_id):
     else:
         used_resources = {
             'networks': set(),
+            'networks_wg': set(),
             'interfaces': set(),
             'ports': set(),
+            'ports_wg': set(),
         }
 
+    ports = set(used_resources['ports'] or [])
+    ports_wg = set([_f for _f in used_resources['ports_wg'] if _f])
+    try:
+        ports_wg.remove('udp')
+    except KeyError:
+        pass
+    ports = ports.union(ports_wg)
+
+    networks = set(used_resources['networks'] or [])
+    networks_wg = set([_f for _f in used_resources['networks_wg'] if _f])
+    networks = networks.union(networks_wg)
+
     return {
-        'networks': {ipaddress.IPNetwork(
-            x) for x in used_resources['networks']},
-        'interfaces': set(used_resources['interfaces']),
-        'ports': set(used_resources['ports']),
+        'networks': {ipaddress.ip_network(x, strict=False) for x in networks},
+        'interfaces': set(used_resources['interfaces'] or []),
+        'ports': ports,
     }
 
 def iter_servers(spec=None, fields=None, page=None):
@@ -105,9 +124,7 @@ def iter_servers_dict(page=None):
 def get_server_page_total():
     org_collection = mongo.get_collection('servers')
 
-    count = org_collection.find({}, {
-        '_id': True,
-    }).count()
+    count = org_collection.estimated_document_count()
 
     return int(math.floor(max(0, float(count - 1)) /
         settings.app.server_page_count))
@@ -168,17 +185,16 @@ def link_servers(server_id, link_server_id, use_local_address=False):
         hosts.update(hosts_set)
 
         routes_set = set()
-        for route in svr.get_routes():
+        for route in svr.get_routes(include_dns_routes=False):
             if route['network'] != '0.0.0.0/0':
                 routes_set.add(route['network'])
         if routes & routes_set:
             return SERVER_LINK_COMMON_ROUTE, SERVER_LINK_COMMON_ROUTE_MSG
         routes.update(routes_set)
 
-    tran = transaction.Transaction()
-    collection = tran.collection('servers')
+    collection = mongo.get_collection('servers')
 
-    collection.update({
+    collection.update_one({
         '_id': server_id,
         'links.server_id': {'$ne': link_server_id},
     }, {'$push': {
@@ -189,7 +205,7 @@ def link_servers(server_id, link_server_id, use_local_address=False):
         },
     }})
 
-    collection.update({
+    collection.update_one({
         '_id': link_server_id,
         'links.server_id': {'$ne': server_id},
     }, {'$addToSet': {
@@ -199,8 +215,6 @@ def link_servers(server_id, link_server_id, use_local_address=False):
             'use_local_address': use_local_address,
         },
     }})
-
-    tran.commit()
 
     return None, None
 
@@ -219,19 +233,21 @@ def unlink_servers(server_id, link_server_id):
         if doc['status'] == ONLINE:
             raise ServerLinkOnlineError('Server must be offline to unlink')
 
-    tran = transaction.Transaction()
-    collection = tran.collection('servers')
+    collection = mongo.get_collection('servers')
 
-    collection.update({
+    collection.update_one({
         '_id': server_id,
     }, {'$pull': {
         'links': {'server_id': link_server_id},
     }})
 
-    collection.update({
+    collection.update_one({
         '_id': link_server_id,
     }, {'$pull': {
         'links': {'server_id': server_id},
     }})
 
-    tran.commit()
+def has_server_sso():
+    return bool(Server.collection.count_documents({
+        'sso_auth': True,
+    }))

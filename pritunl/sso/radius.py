@@ -4,8 +4,9 @@ from pritunl import logger
 from pritunl.pyrad import client
 from pritunl.pyrad import packet
 from pritunl.pyrad import dictionary
+from pritunl import utils
 
-import StringIO
+import io
 
 def verify_radius(username, password):
     hosts = settings.app.sso_radius_host.split(',')
@@ -23,15 +24,18 @@ def verify_radius(username, password):
             authport=port,
             secret=settings.app.sso_radius_secret.encode(),
             dict=dictionary.Dictionary(
-                StringIO.StringIO(RADIUS_DICTONARY)),
+                io.StringIO(RADIUS_DICTONARY)),
         )
+
+        if settings.app.sso_radius_timeout:
+            conn.timeout = settings.app.sso_radius_timeout
 
         req = conn.CreateAuthPacket(
             code=packet.AccessRequest,
             User_Name=(
-                settings.app.sso_radius_prefix or '') + username.encode(),
+                settings.app.sso_radius_prefix or '') + username,
         )
-        req['User-Password'] = req.PwCrypt(password.encode())
+        req['User-Password'] = req.PwCrypt(password)
 
         try:
             reply = conn.SendPacket(req)
@@ -72,6 +76,9 @@ def verify_radius(username, password):
         pass
 
     org_names = org_names or org_names2
+
+    org_names = [utils.filter_str(x.decode()) for x in org_names]
+    group_names = [utils.filter_str(x.decode()) for x in group_names]
 
     groups = set()
     for group in group_names:

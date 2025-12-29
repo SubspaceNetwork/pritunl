@@ -10,21 +10,18 @@ import os
 
 def rotate():
     base_path = settings.conf.journal_path
+    rotate_count = settings.app.journal_rotate_count
 
-    if os.path.exists(base_path + '.5'):
-        os.remove(base_path + '.5')
+    oldest_file = base_path + '.' + str(rotate_count)
+    if os.path.exists(oldest_file):
+        os.remove(oldest_file)
 
-    if os.path.exists(base_path + '.4'):
-        os.rename(base_path + '.4', base_path + '.5')
+    for i in range(rotate_count - 1, 0, -1):
+        current_file = base_path + '.' + str(i)
+        next_file = base_path + '.' + str(i + 1)
 
-    if os.path.exists(base_path + '.3'):
-        os.rename(base_path + '.3', base_path + '.4')
-
-    if os.path.exists(base_path + '.2'):
-        os.rename(base_path + '.2', base_path + '.3')
-
-    if os.path.exists(base_path + '.1'):
-        os.rename(base_path + '.1', base_path + '.2')
+        if os.path.exists(current_file):
+            os.rename(current_file, next_file)
 
     if os.path.exists(base_path):
         os.rename(base_path, base_path + '.1')
@@ -39,12 +36,11 @@ def _journal_runner_thread():
                 try:
                     event = journal_queue.popleft()
                     with open(settings.conf.journal_path, 'ab+') as jfile:
-                        json.dump(
+                        jfile.write(json.dumps(
                             event,
-                            jfile,
                             default=lambda x: str(x)
-                        )
-                        jfile.write(bytes('\n'))
+                        ).encode() + '\n'.encode())
+                        jfile.flush()
                         size = jfile.tell()
                     if size > settings.app.journal_rotate_size:
                         rotate()
@@ -61,4 +57,5 @@ def _journal_runner_thread():
             time.sleep(1)
 
 def start_journal():
-    threading.Thread(target=_journal_runner_thread).start()
+    threading.Thread(name="JournalRunner",
+        target=_journal_runner_thread).start()

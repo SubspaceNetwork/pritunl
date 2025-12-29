@@ -85,7 +85,33 @@ class Vxlan(object):
             'nolearning',
         ], ignore_states=['File exists'])
 
-        self.vxlan_mac = utils.get_interface_mac_address(self.iface_name)
+        mac_addr = utils.generate_random_mac()
+
+        utils.check_output_logged([
+            'ip',
+            'link',
+            'set',
+            'dev',
+            self.iface_name,
+            'address',
+            mac_addr,
+        ])
+
+        iface_mac = utils.get_interface_mac_address(self.iface_name)
+        if mac_addr.lower() != iface_mac.lower():
+            logger.error('Failed to set vxlan mac address', 'vxlan',
+                vxlan_id=self.vxlan_id,
+                server_id=self.server_id,
+                host_id=settings.local.host_id,
+                local_addr=settings.local.host.local_addr,
+                mac_addr=mac_addr,
+                iface_mac=iface_mac,
+            )
+            time.sleep(1)
+            iface_mac = utils.get_interface_mac_address(self.iface_name)
+
+        self.vxlan_mac = iface_mac
+
         self._init_host()
         self.vxlan_addr = self.get_host_addr(self.host_vxlan_id)
         if self.ipv6:
@@ -131,7 +157,7 @@ class Vxlan(object):
         if self.ipv6:
             local_addr6 = settings.local.host.local_addr6
 
-        doc = self.vxlan_collection.find_and_modify({
+        doc = self.vxlan_collection.find_one_and_update({
             '_id': self.vxlan_id,
             'server_id': self.server_id,
             'hosts.host_dst': {'$nin': [local_addr]},
@@ -141,10 +167,10 @@ class Vxlan(object):
                 'host_dst': local_addr,
                 'host_dst6': local_addr6,
             },
-        }}, new=True)
+        }}, return_document=True)
 
         if not doc:
-            doc = self.vxlan_collection.find_and_modify({
+            doc = self.vxlan_collection.find_one_and_update({
                 '_id': self.vxlan_id,
                 'server_id': self.server_id,
                 'hosts.host_dst': local_addr,
@@ -152,7 +178,7 @@ class Vxlan(object):
                 'hosts.$.vxlan_mac': self.vxlan_mac,
                 'hosts.$.host_dst': local_addr,
                 'hosts.$.host_dst6': local_addr6,
-            }}, new=True)
+            }}, return_document=True)
 
         if doc:
             for host_vxlan_id, data in enumerate(doc['hosts']):
@@ -256,16 +282,36 @@ class Vxlan(object):
             self.get_host_addr(host_vxlan_id),
         )
 
-    def add_host(self, host_vxlan_id, vxlan_mac, host_dst, host_dst6):
-        if settings.local.host.local_addr == host_dst:
-            return
+    def flush_fdb(self, host_dst):
+        output = utils.check_output([
+            'bridge', 'fdb', 'show', 'dev', self.iface_name,
+        ])
 
+        for line in output.split('\n'):
+            if f'dst {host_dst}' in line and 'self permanent' in line:
+                parts = line.split()
+                if parts:
+                    mac_addr = parts[0]
+                    try:
+                        utils.check_call_silent([
+                            'bridge', 'fdb', 'del',
+                            mac_addr, 'dev', self.iface_name, 'dst', host_dst,
+                        ])
+                    except:
+                        pass
+
+    def add_host(self, host_vxlan_id, vxlan_mac, host_dst, host_dst6):
         self.running_lock.acquire()
         try:
+            self.flush_fdb(host_dst)
+
+            if settings.local.host.local_addr == host_dst:
+                return
+
             if not self.running:
                 return
 
-            for i in xrange(2):
+            for i in range(2):
                 try:
                     if i == 0:
                         check_func = utils.check_output
@@ -305,53 +351,65 @@ class Vxlan(object):
             ])
 
             if host_dst6:
-                for i in xrange(2):
-                    try:
-                        if i == 0:
-                            check_func = utils.check_output
-                        else:
-                            check_func = utils.check_output_logged
+                utils.check_output_logged([
+                    'ip',
+                    '-6',
+                    'neighbour',
+                    'replace',
+                    self.get_host_addr6(host_vxlan_id),
+                    'lladdr',
+                    vxlan_mac,
+                    'dev',
+                    self.iface_name,
+                ])
+        except:
+            logger.error('Failed to add vxlan host', 'vxlan',
+                vxlan_id=self.vxlan_id,
+                server_id=self.server_id,
+            )
+            raise
+        finally:
+            self.running_lock.release()
 
-                        check_func([
-                            'ip',
-                            '-6',
-                            'neighbour',
-                            'add',
-                            self.get_host_addr6(host_vxlan_id),
-                            'lladdr',
-                            vxlan_mac,
-                            'dev',
-                            self.iface_name,
-                        ], ignore_states=['File exists'])
+    def add_host2(self, host_vxlan_id, vxlan_mac, host_dst, host_dst6):
+        self.running_lock.acquire()
+        try:
+            if settings.local.host.local_addr == host_dst:
+                return
 
-                        break
-                    except subprocess.CalledProcessError:
-                        if i == 0:
-                            utils.check_output_logged([
-                                'ip',
-                                '-6',
-                                'neighbour',
-                                'del',
-                                self.get_host_addr6(host_vxlan_id),
-                                'dev',
-                                self.iface_name,
-                            ])
-                            for j in xrange(30):
-                                try:
-                                    utils.check_call_silent([
-                                        'ip',
-                                        '-6',
-                                        'neighbour',
-                                        'del',
-                                        self.get_host_addr6(host_vxlan_id),
-                                        'dev',
-                                        self.iface_name,
-                                    ])
-                                except:
-                                    break
-                                time.sleep(0.5)
-                        else:
-                            raise
+            if not self.running:
+                return
+
+            utils.check_output_logged([
+                'bridge',
+                'fdb',
+                'append',
+                '00:00:00:00:00:00',
+                'dev',
+                self.iface_name,
+                'dst',
+                host_dst,
+            ], ignore_states=['File exists'])
+
+            utils.check_output_logged([
+                'arp',
+                '-s',
+                self.get_host_addr(host_vxlan_id),
+                vxlan_mac,
+            ])
+
+            if host_dst6:
+                utils.check_output_logged([
+                    'ip',
+                    '-6',
+                    'neighbour',
+                    'replace',
+                    self.get_host_addr6(host_vxlan_id),
+                    'lladdr',
+                    vxlan_mac,
+                    'dev',
+                    self.iface_name,
+                ])
         except:
             logger.error('Failed to add vxlan host', 'vxlan',
                 vxlan_id=self.vxlan_id,
@@ -362,7 +420,7 @@ class Vxlan(object):
             self.running_lock.release()
 
 def _get_ids():
-    ids = range(0, 256)
+    ids = list(range(0, 256))
     random.shuffle(ids)
     return ids
 
@@ -379,7 +437,7 @@ def get_vxlan_id(server_id):
 
         vxlan_id = vxlan_ids.pop()
         try:
-            coll.insert({
+            coll.insert_one({
                 '_id': vxlan_id,
                 'server_id': server_id,
                 'hosts': [],

@@ -10,10 +10,16 @@ define([
       'name': null,
       'type': null,
       'ipv6': null,
+      'protocol': null,
+      'wg_port': null,
+      'host_check': null,
       'action': null,
       'status': null,
       'locations': null,
-      'timeout': null
+      'timeout': null,
+      'preferred_ike': null,
+      'preferred_esp': null,
+      'force_preferred': null
     },
     url: function() {
       var url = '/link';

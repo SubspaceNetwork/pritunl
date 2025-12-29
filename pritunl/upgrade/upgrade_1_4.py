@@ -14,10 +14,10 @@ def upgrade_1_4():
         if not doc.get('network'):
             continue
 
-        if isinstance(doc['network'], (int, long)):
+        if isinstance(doc['network'], int):
             continue
 
-        ip_pool_collection.update({
+        ip_pool_collection.update_one({
             '_id': doc['_id'],
         }, {'$set': {
             'network': utils.fnv32a(doc['network'])

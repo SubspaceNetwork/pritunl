@@ -14,15 +14,31 @@
         <option value="tcp" <%= protocol === 'tcp' ? 'selected' : '' %>>tcp</option>
       </select>
     </div>
+    <div class="port-wg form-group" <%= wg ? '' : 'style="display: none;"' %>>
+      <label>WG Port</label>
+      <input type="text" class="form-control" placeholder="Enter wg port number" data-toggle="tooltip" title="Port number for WG connections" value="<%- port_wg %>" autocapitalize="off">
+    </div>
     <div class="form-group groups">
       <label>Groups</label>
       <div class="groups-label" data-toggle="tooltip" title="Enter list of groups to allow connections from. Names are case sensitive. If empty all groups will able to connect">
         <input type="text" placeholder="Enter groups" value="<%- groups ? groups.join(',') : '' %>">
       </div>
     </div>
-    <div class="ipv6-toggle toggle-form form-group">
-      <label>Enable IPv6</label>
-      <div class="selector <%= ipv6 ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Enable IPv6 on server, requires IPv6 network interface">
+    <div class="route-dns-toggle toggle-form form-group" style="display: none;">
+      <label>Enable DNS Routing</label>
+      <div class="selector <%= route_dns ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Route DNS traffic through VPN to prevent DNS vulnerabilities on malicious networks">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
+    </div>
+    <div class="wg-toggle toggle-form form-group">
+      <label>Enable WireGuard</label>
+      <div class="selector <%= wg ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Enable WG connections on server. WireGuard packages must be installed separately">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
+    </div>
+    <div class="dns-mapping-toggle toggle-form form-group">
+      <label>Enable VPN Client DNS Mapping</label>
+      <div class="selector <%= dns_mapping ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Map the vpn clients ip address to the .vpn domain such as example_user.example_org.vpn This will conflict with the DNS port if systemd-resolved is running">
         <span class="selector-inner glyphicon glyphicon-ok"></span>
       </div>
     </div>
@@ -36,6 +52,29 @@
       <label>Virtual Network</label>
       <span class="label label-default no-select" toggle="tooltip" title="Maximum number of users for this subnet"></span>
       <input type="text" class="form-control" placeholder="Enter network address" data-toggle="tooltip" title="Network address for the private network that will be created for clients. This network cannot conflict with any existing local networks" value="<%- network %>" autocapitalize="off">
+    </div>
+    <div class="network-wg form-group" <%= wg ? '' : 'style="display: none;"' %>>
+      <label>Virtual WG Network</label>
+      <span class="label label-default no-select" toggle="tooltip" title="Maximum number of users for this subnet"></span>
+      <input type="text" class="form-control" placeholder="Enter WG network address" data-toggle="tooltip" title="WG Network address for the private network that will be created for clients. Must have the same CIDR as virtual network. This network cannot conflict with any existing local networks" value="<%- network_wg %>" autocapitalize="off">
+    </div>
+    <div class="sso-auth-toggle toggle-form form-group">
+      <label>Single Sign-On Authentication</label>
+      <div class="selector <%= sso_auth ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Require client to authenticate with single sign-on provider on each connection using web browser. Requires client to have access to Pritunl web server port and running updated Pritunl Client.">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
+    </div>
+    <div class="bypass-sso-auth-toggle toggle-form form-group">
+      <label>Bypass Single Sign-On</label>
+      <div class="selector <%= bypass_sso_auth ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Disable single sign-on verification to allow connections during single sign-on outage. Requires device authentication.">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
+    </div>
+    <div class="device-auth-toggle toggle-form form-group">
+      <label>Device Authentication</label>
+      <div class="selector <%= device_auth ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Require administrator to approve every client device using TPM or Apple Secure Enclave. User will be prompted to provide device PIN to administrator when connecting a new device. Requires Pritunl Client running on Linux with a TPM, Windows 11 or macOS with Secure Enclave.">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
     </div>
     <div class="otp-auth-toggle toggle-form form-group">
       <label>Enable Google Authenticator</label>
@@ -67,16 +106,18 @@
       <label>Encryption Cipher</label>
       <select class="form-control" data-toggle="tooltip" title="Encryption cipher used for VPN traffic. AES 128bit is recommended for best bandwidth. Using AES 256bit will impact bandwidth. AES ciphers will use GCM when available">
         <option value="none" <%= cipher === 'none' ? 'selected' : '' %>>None</option>
-        <option value="bf128" <%= cipher === 'bf128' ? 'selected' : '' %>>Blowfish 128bit</option>
-        <option value="bf256" <%= cipher === 'bf256' ? 'selected' : '' %>>Blowfish 256bit</option>
-        <option value="aes128" <%= cipher === 'aes128' ? 'selected' : '' %>>AES 128bit</option>
-        <option value="aes192" <%= cipher === 'aes192' ? 'selected' : '' %>>AES 192bit</option>
-        <option value="aes256" <%= cipher === 'aes256' ? 'selected' : '' %>>AES 256bit</option>
+        <option value="aes128" <%= cipher === 'aes128' ? 'selected' : '' %>>AES 128bit GCM</option>
+        <option value="aes256" <%= cipher === 'aes256' ? 'selected' : '' %>>AES 256bit GCM</option>
+        <option value="chacha20poly1205" <%= cipher === 'chacha20poly1205' ? 'selected' : '' %>>ChaCha20-Poly1305</option>
       </select>
     </div>
     <div class="ping-interval form-group">
       <label>Ping Interval</label>
       <input type="number" class="form-control" placeholder="Enter ping interval" data-toggle="tooltip" title="Optional, interval to ping client" value="<%- ping_interval || '' %>" min="0" autocapitalize="off">
+    </div>
+    <div class="ping-interval-wg form-group" <%= wg ? '' : 'style="display: none;"' %>>
+      <label>WireGuard Ping Interval</label>
+      <input type="number" class="form-control" placeholder="Enter ping interval" data-toggle="tooltip" title="Optional, interval to ping WireGuard client" value="<%- ping_interval_wg || '' %>" min="0" autocapitalize="off">
     </div>
     <div class="link-ping-interval form-group">
       <label>User Link Ping Interval</label>
@@ -85,9 +126,13 @@
         value="<%- link_ping_interval || '' %>" min="0" step="0.1"
         autocapitalize="off">
     </div>
-    <div class="inactive-timeout form-group">
+    <div class="inactive-timeout form-group" <%= inactive_timeout ? '' : 'style="display: none;"' %>>
       <label>User Inactive Timeout</label>
       <input type="number" class="form-control" placeholder="Enter inactive timeout" data-toggle="tooltip" title="Optional, disconnect users after the specified number of seconds of inactivity." min="0" step="0.1" value="<%- inactive_timeout || '' %>" autocapitalize="off">
+    </div>
+    <div class="session-timeout form-group">
+      <label>User Session Timeout</label>
+      <input type="number" class="form-control" placeholder="Enter session timeout" data-toggle="tooltip" title="Optional, disconnect users after the specified number of seconds. Disables automatic reconection" min="0" step="0.1" value="<%- session_timeout || '' %>" autocapitalize="off">
     </div>
     <div class="max-clients form-group">
       <label>Max Clients</label>
@@ -104,9 +149,17 @@
       <label>Network Start</label>
       <input type="text" class="form-control" placeholder="Enter start address" data-toggle="tooltip" title="Starting network address for the bridged VPN client IP addresses. Must be in the subnet of the server network" value="<%- network_start %>" autocapitalize="off">
     </div>
+    <div class="tun-mtu form-group">
+      <label>Tunnel MTU</label>
+      <input type="text" class="form-control" placeholder="Enter tunnel MTU" data-toggle="tooltip" title="Optional, connection MTU value. This option sets the OpenVPN and WireGuard tunnel interface MTU value on both the client and server. Changing this option can break client configurations if not updated with configuration sync or reimported. Try adjusting MSS MTU and Fragment MTU before attempting to modify this value. This option should be left blank to allow the server to detect the optimal MTU. Refer to the debugging documentation to resolve MTU issues. Should never exceed 1500" value="<%- tun_mtu || '' %>" autocapitalize="off">
+    </div>
     <div class="mss-fix form-group">
-      <label>MSS Fix</label>
-      <input type="text" class="form-control" placeholder="Enter MSS fix" data-toggle="tooltip" title="Optional, MSS fix value" value="<%- mss_fix || '' %>" autocapitalize="off">
+      <label>MSS MTU</label>
+      <input type="text" class="form-control" placeholder="Enter MSS MTU" data-toggle="tooltip" title="Optional, connection MSS fix value. This option sets the maximum segment size for TCP connections. This will only affect OpenVPN connections using TCP. The value will be pushed to the client on connection and does not require client configuration changes. This option should be left blank to allow the server to detect the optimal MTU. Refer to the debugging documentation to resolve MTU issues. Should never exceed 1420" value="<%- mss_fix || '' %>" autocapitalize="off">
+    </div>
+    <div class="fragment form-group">
+      <label>Fragment MTU</label>
+      <input type="text" class="form-control" placeholder="Enter fragment MTU" data-toggle="tooltip" title="Optional, fragment MTU value. This controls the maximum UDP packet size. This will only affect OpenVPN connections using UDP. The value will be pushed to the client on connection and does not require client configuration changes. This option should be left blank to allow the server to detect the optimal MTU. Refer to the debugging documentation to resolve MTU issues. Should never exceed 1440" value="<%- fragment || '' %>" autocapitalize="off">
     </div>
     <div class="max-devices form-group">
       <label>Max Devices</label>
@@ -134,6 +187,10 @@
     <div class="ping-timeout form-group">
       <label>Ping Timeout</label>
       <input type="number" class="form-control" placeholder="Enter ping timeout" data-toggle="tooltip" title="Optional, timeout for client ping. Must be greater then ping interval" min="0" value="<%- ping_timeout || '' %>" autocapitalize="off">
+    </div>
+    <div class="ping-timeout-wg form-group" <%= wg ? '' : 'style="display: none;"' %>>
+      <label>WireGuard Ping Timeout</label>
+      <input type="number" class="form-control" placeholder="Enter ping timeout" data-toggle="tooltip" title="Optional, timeout for WireGuard client ping. Must be greater then ping interval" min="0" value="<%- ping_timeout_wg || '' %>" autocapitalize="off">
     </div>
     <div class="link-ping-timeout form-group">
       <label>User Link Ping Timeout</label>
@@ -179,25 +236,55 @@
     </div>
     <div class="block-outside-dns-toggle toggle-form form-group">
       <label>Block Outside DNS</label>
-      <div class="selector <%= block_outside_dns ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Block outside DNS on Windows clients">
-        <span class="selector-inner glyphicon glyphicon-ok"></span>
-      </div>
-    </div>
-    <div class="dns-mapping-toggle toggle-form form-group">
-      <label>Enable VPN Client DNS Mapping</label>
-      <div class="selector <%= dns_mapping ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Map the vpn clients ip address to the .vpn domain such as example_user.example_org.vpn">
+      <div class="selector <%= block_outside_dns ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Block outside DNS on Windows clients. Must include DNS server IP in the server routes.">
         <span class="selector-inner glyphicon glyphicon-ok"></span>
       </div>
     </div>
     <div class="inter-client-toggle toggle-form form-group">
-      <label>Inter-Client Communication</label>
-      <div class="selector <%= inter_client ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Allow clients to communicate with each other on the vpn network">
+      <label>Inter-Client Routing</label>
+      <div class="selector <%= inter_client ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Enable inter-client routing across hosts">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
+    </div>
+    <div class="multihome-toggle toggle-form form-group">
+      <label>Multihome</label>
+      <div class="selector <%= multihome ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Enable multihome to allow UDP connections from multiple external IP addresses. This option will add overhead to VPN connections">
         <span class="selector-inner glyphicon glyphicon-ok"></span>
       </div>
     </div>
     <div class="vxlan-toggle toggle-form form-group">
       <label>VXLan Routing</label>
       <div class="selector <%= vxlan ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Use VXLan for routing client-to-client traffic with replicated servers">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
+    </div>
+    <div class="hide-ovpn-toggle toggle-form form-group">
+      <label>Hide OpenVPN Option</label>
+      <div class="selector <%= hide_ovpn ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Hide OpenVPN option on client to force WireGuard connections when it is available.">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
+    </div>
+    <div class="ovpn-dco-toggle toggle-form form-group">
+      <label>Data Channel Offload</label>
+      <div class="selector <%= ovpn_dco ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Enable OpenVPN data channel offload, requires OpenVPN DCO kernel module.">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
+    </div>
+    <div class="dynamic-firewall-toggle toggle-form form-group">
+      <label>Dynamic Client Firewall</label>
+      <div class="selector <%= dynamic_firewall ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Block VPN server ports by default and open port for client IP address after authenticating with HTTPS request. Requires client to have access to Pritunl web server port and running updated Pritunl Client.">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
+    </div>
+    <div class="geo-sort-toggle toggle-form form-group">
+      <label>Geo Sort Host Selection</label>
+      <div class="selector <%= geo_sort ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Pritunl Client will sort hosts based on geographical location when attempting to connect to server">
+        <span class="selector-inner glyphicon glyphicon-ok"></span>
+      </div>
+    </div>
+    <div class="force-connect-toggle toggle-form form-group">
+      <label>Force Client Connection</label>
+      <div class="selector <%= force_connect ? 'selected' : '' %> no-select" data-toggle="tooltip" title="Pritunl Client will prevent user from disabling profiles for this server">
         <span class="selector-inner glyphicon glyphicon-ok"></span>
       </div>
     </div>

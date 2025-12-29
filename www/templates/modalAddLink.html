@@ -10,9 +10,28 @@
       <option value="direct">Direct</option>
     </select>
   </div>
+  <div class="form-group protocol">
+    <label>Protocol</label>
+    <select class="form-control" data-toggle="tooltip" title="Link protocol.">
+      <option value="ipsec">IPsec</option>
+      <option value="wg" selected>WireGuard</option>
+    </select>
+  </div>
+  <div class="form-group">
+    <div class="form-group wg-port">
+      <label>WireGuard Port</label>
+      <input type="text" class="form-control" placeholder="Enter WireGuard port" data-toggle="tooltip" title="Port for WireGuard connections, must be unique to other links. Leave blank for random port">
+    </div>
+  </div>
   <div class="ipv6-toggle toggle-form form-group">
     <label>IPv6</label>
     <div class="selector no-select" data-toggle="tooltip" title="Connect link hosts with IPv6. All link hosts must have an IPv6 address.">
+      <span class="selector-inner glyphicon glyphicon-ok"></span>
+    </div>
+  </div>
+  <div class="host-check-toggle toggle-form form-group">
+    <label>Host Checking</label>
+    <div class="selector no-select" data-toggle="tooltip" title="Enable advanced host to host checking to support detecting more complex network failures.">
       <span class="selector-inner glyphicon glyphicon-ok"></span>
     </div>
   </div>
@@ -22,5 +41,23 @@
       <option value="restart" selected>Restart</option>
       <option value="hold">Hold</option>
     </select>
+  </div>
+</div>
+<div class="form-group">
+  <div class="form-group preferred-ike">
+    <label>Preferred IKE Cipher</label>
+    <input type="text" class="form-control" placeholder="Enter cipher" data-toggle="tooltip" title="Preferred IKE Cipher, refer to strongSwan IKEv2 Cipher Suites. Leave blank for default">
+  </div>
+</div>
+<div class="form-group">
+  <div class="form-group preferred-esp">
+    <label>Preferred ESP Cipher</label>
+    <input type="text" class="form-control" placeholder="Enter cipher" data-toggle="tooltip" title="Preferred ESP Cipher, refer to strongSwan IKEv2 Cipher Suites. Leave blank for default">
+  </div>
+</div>
+<div class="force-preferred-toggle toggle-form form-group">
+  <label>Force Preferred Cipher</label>
+  <div class="selector no-select" data-toggle="tooltip" title="Force IPsec connections to use preferred cipher. Connections will not be allowed from other ciphers. Requires updated pritunl-link clients.">
+    <span class="selector-inner glyphicon glyphicon-ok"></span>
   </div>
 </div>

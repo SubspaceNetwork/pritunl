@@ -13,8 +13,10 @@ import datetime
 @queue.add_queue
 class QueueAssignIpPool(queue.Queue):
     fields = {
+        'wg',
         'server_id',
         'network',
+        'network_wg',
         'network_start',
         'network_end',
         'network_hash',
@@ -70,7 +72,7 @@ class QueueAssignIpPool(queue.Queue):
             )
             return
 
-        response = self.server_collection.update({
+        response = self.server_collection.update_one({
             '_id': self.server_id,
             '$or': [
                 {'network_lock': self.id},
@@ -83,7 +85,7 @@ class QueueAssignIpPool(queue.Queue):
             'network_lock': self.id,
             'network_lock_ttl': utils.now() + datetime.timedelta(minutes=3),
         }})
-        if not response['updatedExisting']:
+        if not bool(response.modified_count):
             raise ServerNetworkLocked('Server network is locked', {
                 'server_id': self.server_id,
                 'queue_id': self.id,
@@ -95,12 +97,12 @@ class QueueAssignIpPool(queue.Queue):
 
     def post_task(self):
         try:
-            self.server_ip_pool_collection.remove({
+            self.server_ip_pool_collection.delete_many({
                 'network': self.old_network_hash,
                 'server_id': self.server_id,
             })
         finally:
-            self.server_collection.update({
+            self.server_collection.update_one({
                 '_id': self.server_id,
                 'network_lock': self.id,
             }, {'$unset': {
@@ -109,7 +111,7 @@ class QueueAssignIpPool(queue.Queue):
 
     def rollback_task(self):
         try:
-            self.server_ip_pool_collection.remove({
+            self.server_ip_pool_collection.delete_many({
                 'network': self.network_hash,
                 'server_id': self.server_id,
             })
@@ -123,14 +125,14 @@ class QueueAssignIpPool(queue.Queue):
             if not self.old_network_start or not self.old_network_end:
                 doc['mode'] = TUNNEL
 
-            self.server_collection.update({
+            self.server_collection.update_one({
                 '_id': self.server_id,
                 'network': self.network,
                 'network_start': self.network_start,
                 'network_end': self.network_end,
             }, {'$set': doc})
         finally:
-            self.server_collection.update({
+            self.server_collection.update_one({
                 '_id': self.server_id,
                 'network_lock': self.id,
             }, {'$unset': {

@@ -40,7 +40,12 @@ class ServerInstanceLink(object):
         self.interface = utils.interface_acquire(
             self.linked_server.adapter_type)
 
-        remotes = self.linked_server.get_key_remotes(True)
+        remotes, _ = self.linked_server.get_key_remotes(True)
+
+        if self.linked_server.ovpn_dco:
+            ciphers = CIPHERS_DCO
+        else:
+            ciphers = CIPHERS
 
         client_conf = OVPN_INLINE_LINK_CONF % (
             uuid.uuid4().hex,
@@ -48,16 +53,21 @@ class ServerInstanceLink(object):
             self.interface,
             self.linked_server.adapter_type,
             remotes,
-            CIPHERS[self.linked_server.cipher],
+            ciphers[self.linked_server.cipher],
             HASHES[self.linked_server.hash],
             4 if self.server.debug else 1,
             8 if self.server.debug else 3,
             settings.app.host_ping,
             settings.app.host_ping_ttl,
+            settings.vpn.server_poll_timeout,
         )
 
-        if self.linked_server.lzo_compression != ADAPTIVE:
+        if self.linked_server.lzo_compression != ADAPTIVE and \
+                not self.linked_server.ovpn_dco:
             client_conf += 'comp-lzo no\n'
+
+        if self.linked_server.tun_mtu:
+            client_conf += 'tun-mtu %s\n' % svr.tun_mtu
 
         if self.server.debug:
             self.server.output_link.push_message(
@@ -73,12 +83,12 @@ class ServerInstanceLink(object):
                         link_server_id=self.linked_server.id,
                     )
 
-        client_conf += JUMBO_FRAMES[self.linked_server.jumbo_frames]
         client_conf += '<ca>\n%s\n</ca>\n' % self.linked_server.ca_certificate
 
         if self.linked_server.tls_auth:
-            client_conf += 'key-direction 1\n<tls-auth>\n%s\n</tls-auth>\n' % (
-                self.linked_server.tls_auth_key)
+            tls_mode = settings.vpn.tls_mode
+            client_conf += 'key-direction 1\n<%s>\n%s\n</%s>\n' % (
+                tls_mode, self.linked_server.tls_auth_key, tls_mode)
 
         client_conf += ('<cert>\n%s\n' +
             '</cert>\n') % utils.get_cert_block(self.user.certificate)
@@ -86,21 +96,20 @@ class ServerInstanceLink(object):
             self.user.private_key.strip())
 
         with open(ovpn_conf_path, 'w') as ovpn_conf:
-            os.chmod(ovpn_conf_path, 0600)
+            os.chmod(ovpn_conf_path, 0o600)
             ovpn_conf.write(client_conf)
 
         return ovpn_conf_path
 
     def openvpn_start(self):
-        # TODO Remove might no longer be needed
-        response = self.collection.update({
+        response = self.collection.update_one({
             '_id': self.linked_server.id,
             'links.server_id': self.server.id,
         }, {'$set': {
             'links.$.user_id': self.user.id,
         }})
 
-        if not response['updatedExisting']:
+        if not bool(response.matched_count):
             raise ServerLinkError('Failed to update server links')
 
         self.user.link_server_id = self.server.id
@@ -139,7 +148,7 @@ class ServerInstanceLink(object):
 
                     try:
                         self.server.output_link.push_output(
-                            line,
+                            line.decode(),
                             label=self.output_label,
                             link_server_id=self.linked_server.id,
                         )
@@ -194,9 +203,11 @@ class ServerInstanceLink(object):
     def start(self):
         self.openvpn_start()
 
-        thread = threading.Thread(target=self.openvpn_watch)
+        thread = threading.Thread(name="OvpnLinkWatch",
+            target=self.openvpn_watch)
         thread.start()
-        thread = threading.Thread(target=self.stop_watch)
+        thread = threading.Thread(name="OvpnLinkStopWatch",
+            target=self.stop_watch)
         thread.start()
 
     def stop(self):

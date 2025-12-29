@@ -2,10 +2,70 @@ from pritunl.exceptions import *
 from pritunl.constants import *
 from pritunl import settings
 
-import boto.utils
 import boto3
 import requests
 import time
+
+def get_imds_token():
+    response = requests.put(AWS_TOKEN_URL,
+        headers={"X-aws-ec2-metadata-token-ttl-seconds": "21600"},
+        timeout=10,
+    )
+    if response.status_code != 200:
+        raise Exception("Failed to get IMDSv2 token")
+
+    return response.text
+
+def get_instance_metadata(key):
+    token = get_imds_token()
+    response = requests.get(AWS_METADATA_BASE + key,
+        headers={
+            "X-aws-ec2-metadata-token": token,
+        },
+        timeout=10,
+    )
+    if response.status_code != 200:
+        raise Exception("Failed to get instance metadata")
+    return response.text
+
+def get_instance_id():
+    return get_instance_metadata("instance-id")
+
+def get_availability_zone():
+    return get_instance_metadata("placement/availability-zone")
+
+def get_region():
+    zone = get_availability_zone()
+
+    for aws_region in AWS_REGIONS:
+        if zone.startswith(aws_region):
+            return aws_region
+
+    raise Exception("Failed to get instance region")
+
+def get_vpc_id():
+    macs = get_instance_metadata("network/interfaces/macs")
+    for mac_path in macs.splitlines():
+        return get_instance_metadata(
+            "network/interfaces/macs/" + mac_path + "vpc-id")
+
+    raise Exception("Failed to get instance VPC")
+
+def get_iface_macs():
+    return get_instance_metadata("network/interfaces/macs")
+
+def get_metadata():
+    instance_id = get_instance_id()
+    availability_zone = get_availability_zone()
+    region = get_region()
+    vpc_id = get_vpc_id()
+
+    return {
+        'instance_id': instance_id,
+        'availability_zone': availability_zone,
+        'vpc_id': vpc_id,
+        'region': region,
+    }
 
 def connect_ec2(aws_key, aws_secret, region):
     return boto3.client(
@@ -14,50 +74,6 @@ def connect_ec2(aws_key, aws_secret, region):
         aws_secret_access_key=aws_secret,
         region_name=region,
     )
-
-def get_instance_id():
-    try:
-        resp = requests.get(
-            'http://169.254.169.254/latest/meta-data/instance-id',
-            timeout=0.5,
-        )
-
-        if resp.status_code != 200:
-            return
-
-        return resp.content
-    except:
-        pass
-
-def get_metadata():
-    metadata = boto.utils.get_instance_metadata()
-
-    instance_id = metadata['instance-id']
-    availability_zone = metadata['placement']['availability-zone']
-    vpc_id = None
-    region = None
-
-    for aws_region in AWS_REGIONS:
-        if availability_zone.startswith(aws_region):
-            region = aws_region
-            break
-
-    for iface in metadata['network']['interfaces']['macs'].values():
-        vpc_id = iface['vpc-id']
-        break
-
-    if not vpc_id:
-        raise ValueError('Failed to get AWS VPC ID')
-
-    if not region:
-        raise ValueError('Failed to get AWS region')
-
-    return {
-        'instance_id': instance_id,
-        'availability_zone': availability_zone,
-        'vpc_id': vpc_id,
-        'region': region,
-    }
 
 def add_vpc_route(network):
     time.sleep(0.1)
@@ -69,7 +85,7 @@ def add_vpc_route(network):
     ipv6 = ':' in network
 
     if not aws_key or not aws_secret:
-        raise ValueError('AWS credentials not available for %s' % region)
+        raise ValueError('AWS credentials not available for %s' % region_key)
 
     if aws_key == 'role':
         aws_key = None

@@ -9,9 +9,10 @@ from pritunl import queues
 
 import threading
 import time
+from queue import PriorityQueue
 
 running_queues = {}
-runner_queues = [utils.PyPriorityQueue() for _ in xrange(3)]
+runner_queues = [PriorityQueue() for _ in range(3)]
 thread_limits = [threading.Semaphore(x) for x in (
     settings.app.queue_low_thread_limit,
     settings.app.queue_med_thread_limit,
@@ -29,7 +30,7 @@ def add_queue_item(queue_item):
     ))
 
     if queue_item.priority >= NORMAL:
-        for running_queue in running_queues.values():
+        for running_queue in list(running_queues.values()):
             if running_queue.priority >= queue_item.priority:
                 continue
 
@@ -58,14 +59,14 @@ def run_timeout_queues():
     }
 
     for queue_item in queue.iter_queues(spec):
-        response = queue.Queue.collection.update({
+        response = queue.Queue.collection.update_one({
             '_id': queue_item.id,
             'ttl_timestamp': {'$lt': cur_timestamp},
         }, {'$unset': {
             'runner_id': '',
         }})
 
-        if response['updatedExisting']:
+        if bool(response.modified_count):
             runner_queues[queue_item.cpu_type].put((
                 abs(queue_item.priority - 4),
                 queue_item,
@@ -102,7 +103,8 @@ def _runner_thread(cpu_priority, thread_limit, runner_queue):
             thread_limit.acquire()
             priority, queue_item = runner_queue.get()
 
-            thread = threading.Thread(target=run_queue_item,
+            thread = threading.Thread(name="QueueRun",
+                target=run_queue_item,
                 args=(queue_item, thread_limit))
             thread.daemon = True
             thread.start()
@@ -112,14 +114,16 @@ def _runner_thread(cpu_priority, thread_limit, runner_queue):
 
 def start_queue():
     for cpu_priority in (LOW_CPU, NORMAL_CPU, HIGH_CPU):
-        thread = threading.Thread(target=_runner_thread, args=(
-            cpu_priority,
-            thread_limits[cpu_priority],
-            runner_queues[cpu_priority],
-        ))
+        thread = threading.Thread(name="QueueRunner",
+            target=_runner_thread, args=(
+                cpu_priority,
+                thread_limits[cpu_priority],
+                runner_queues[cpu_priority],
+            ),
+        )
         thread.daemon = True
         thread.start()
 
-    threading.Thread(target=_check_thread).start()
+    threading.Thread(name="QueueCheck", target=_check_thread).start()
 
     listener.add_listener('queue', _on_msg)

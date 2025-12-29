@@ -10,6 +10,8 @@ from pritunl import logger
 from pritunl import journal
 from pritunl import plugins
 from pritunl import sso
+from pritunl import database
+from pritunl import event
 
 import base64
 import os
@@ -44,7 +46,7 @@ class Administrator(mongo.MongoObject):
     def __init__(self, username=None, password=None, default=None,
             yubikey_id=None, otp_auth=None, auth_api=None, disabled=None,
             super_user=None, **kwargs):
-        mongo.MongoObject.__init__(self, **kwargs)
+        mongo.MongoObject.__init__(self)
         if username is not None:
             self.username = username
         if password is not None:
@@ -136,7 +138,7 @@ class Administrator(mongo.MongoObject):
         else:
             raise ValueError('Unknown hash version')
 
-        test_hash = base64.b64encode(hash_func(pass_salt, test_pass))
+        test_hash = base64.b64encode(hash_func(pass_salt, test_pass)).decode()
         return utils.const_compare(pass_hash, test_hash)
 
     def auth_check(self, password, otp_code=None, yubico_key=None,
@@ -236,7 +238,7 @@ class Administrator(mongo.MongoObject):
         for epoch_offset in range(-1, 2):
             value = struct.pack('>q', epoch + epoch_offset)
             hmac_hash = hmac.new(otp_secret, value, hashlib.sha1).digest()
-            offset = ord(hmac_hash[-1]) & 0x0F
+            offset = hmac_hash[-1] & 0x0F
             truncated_hash = hmac_hash[offset:offset + 4]
             truncated_hash = struct.unpack('>L', truncated_hash)[0]
             truncated_hash &= 0x7FFFFFFF
@@ -246,7 +248,7 @@ class Administrator(mongo.MongoObject):
         if code not in valid_codes:
             return False
 
-        response = self.otp_collection.update({
+        response = self.otp_collection.update_one({
             '_id': {
                 'user_id': self.id,
                 'code': code,
@@ -255,7 +257,7 @@ class Administrator(mongo.MongoObject):
             'timestamp': utils.now(),
         }}, upsert=True)
 
-        if response['updatedExisting']:
+        if bool(response.modified_count):
             return False
 
         return True
@@ -274,7 +276,7 @@ class Administrator(mongo.MongoObject):
 
     def new_session(self):
         session_id = utils.generate_secret()
-        self.collection.update({
+        self.collection.update_one({
             '_id': self.id,
         }, {'$push': {
             'sessions': {
@@ -291,8 +293,8 @@ class Administrator(mongo.MongoObject):
 
             salt = base64.b64encode(os.urandom(8))
             pass_hash = base64.b64encode(
-                hash_password_v3(salt, self.password))
-            pass_hash = '3$%s$%s' % (salt, pass_hash)
+                hash_password_v3(salt, self.password)).decode()
+            pass_hash = '3$%s$%s' % (salt.decode(), pass_hash)
             self.password = pass_hash
 
             if self.default and self.exists:
@@ -312,7 +314,7 @@ class Administrator(mongo.MongoObject):
 
         timestamp = utils.now()
 
-        self.audit_collection.insert({
+        self.audit_collection.insert_one({
             'user_id': self.id,
             'timestamp': timestamp,
             'type': event_type,
@@ -360,7 +362,7 @@ class Administrator(mongo.MongoObject):
         return events
 
 def clear_session(id, session_id):
-    Administrator.collection.update({
+    Administrator.collection.update_one({
         '_id': id,
     }, {'$pull': {
         'sessions': session_id,
@@ -395,22 +397,37 @@ def check_session(csrf_check):
                 not auth_signature:
             return False
         auth_token = auth_token[:256]
-        auth_timestamp = auth_timestamp[:256]
+        auth_timestamp = auth_timestamp[:64]
         auth_nonce = auth_nonce[:32]
         auth_signature = auth_signature[:512]
-
-        try:
-            if abs(int(auth_timestamp) - int(utils.time_now())) > \
-                    settings.app.auth_time_window:
-                return False
-        except ValueError:
-            return False
 
         administrator = find_user(token=auth_token)
         if not administrator:
             return False
 
+        try:
+            if abs(int(auth_timestamp) - int(utils.time_now())) > \
+                    settings.app.auth_time_window:
+                journal.entry(
+                    journal.ADMIN_AUTH_FAILURE,
+                    remote_address=utils.get_remote_addr(),
+                    event_long='Expired auth timestamp',
+                )
+                return False
+        except ValueError:
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Invalid auth timestamp',
+            )
+            return False
+
         if not administrator.auth_api:
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Administrator not API enabled',
+            )
             return False
 
         auth_string = '&'.join([
@@ -418,49 +435,109 @@ def check_session(csrf_check):
             flask.request.path])
 
         if len(auth_string) > AUTH_SIG_STRING_MAX_LEN or len(auth_nonce) < 8:
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Invalid signature or nonce length',
+            )
             return False
 
         if not administrator.secret or len(administrator.secret) < 8:
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Adminsitrator missing secret',
+            )
             return False
 
         auth_test_signature = base64.b64encode(hmac.new(
-            administrator.secret.encode(), auth_string,
-            hashlib.sha256).digest())
+            administrator.secret.encode(), auth_string.encode(),
+            hashlib.sha256).digest()).decode()
         if not utils.const_compare(auth_signature, auth_test_signature):
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Auth signature mismatch',
+            )
             return False
 
         try:
-            Administrator.nonces_collection.insert({
+            Administrator.nonces_collection.insert_one({
                 'token': auth_token,
                 'nonce': auth_nonce,
                 'timestamp': utils.now(),
             })
         except pymongo.errors.DuplicateKeyError:
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Duplicate nonce from reconnection',
+            )
             return False
     else:
         if not flask.session:
             return False
 
+        validated = flask.request.headers.get('PR-Validated', None)
+        if validated != 'true':
+            logger.error(
+                'Request missing external web server validation',
+                'auth',
+                path=flask.request.path,
+            )
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Request session not validated by external web',
+            )
+            return False
+
         admin_id = utils.session_opt_str('admin_id')
         if not admin_id:
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Missing admin ID',
+            )
             return False
-        admin_id = utils.ObjectId(admin_id)
+
+        admin_id = database.ParseObjectId(admin_id)
         session_id = utils.session_opt_str('session_id')
 
         signature = utils.session_opt_str('signature')
         if not signature:
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Missing session signature',
+            )
             return False
 
         if not utils.check_flask_sig():
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Session signature mismatch',
+            )
             return False
 
         if csrf_check:
             csrf_token = flask.request.headers.get('Csrf-Token', None)
             if not validate_token(admin_id, csrf_token):
+                journal.entry(
+                    journal.ADMIN_AUTH_FAILURE,
+                    remote_address=utils.get_remote_addr(),
+                    event_long='Invalid CSRF token',
+                )
                 return False
 
         administrator = get_user(admin_id, session_id)
         if not administrator:
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Invalid administrator user',
+            )
             return False
 
         if not settings.app.reverse_proxy and \
@@ -469,6 +546,11 @@ def check_session(csrf_check):
                 utils.session_opt_str('source') != utils.get_remote_addr():
             flask.session.clear()
             clear_session(admin_id, session_id)
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Remote address change',
+            )
             return False
 
         session_timeout = settings.app.session_timeout
@@ -476,12 +558,19 @@ def check_session(csrf_check):
                 utils.session_int('timestamp') > session_timeout:
             flask.session.clear()
             clear_session(admin_id, session_id)
+            journal.entry(
+                journal.ADMIN_AUTH_FAILURE,
+                remote_address=utils.get_remote_addr(),
+                event_long='Session expired',
+            )
             return False
 
-        flask.session['timestamp'] = int(utils.time_now())
-        utils.set_flask_sig()
-
     if administrator.disabled:
+        journal.entry(
+            journal.ADMIN_AUTH_FAILURE,
+            remote_address=utils.get_remote_addr(),
+            event_long='Administrator disabled',
+        )
         return False
 
     flask.g.administrator = administrator
@@ -530,6 +619,16 @@ def reset_password():
 
     return DEFAULT_USERNAME, default_admin.default_password
 
+def disable_admin_api():
+    admin_collection = mongo.get_collection('administrators')
+    admin_collection.update_many(
+        {},
+        {'$set': {
+            'auth_api': False,
+        }},
+    )
+    event.Event(type=ADMINS_UPDATED)
+
 def iter_admins(fields=None):
     if fields:
         fields = {key: True for key in fields}
@@ -556,13 +655,16 @@ def new_admin(**kwargs):
 
     return admin
 
+def admin_api_count():
+    return Administrator.collection.count_documents({
+        'auth_api': True,
+    })
+
 def super_user_count():
-    return Administrator.collection.find({
+    return Administrator.collection.count_documents({
         'super_user': {'$ne': False},
         'disabled': {'$ne': True},
-    }, {
-        '_id': True,
-    }).count()
+    })
 
 has_default_pass = None
 def has_default_password():

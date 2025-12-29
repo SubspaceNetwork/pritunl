@@ -17,7 +17,7 @@ import flask
 import hmac
 import hashlib
 import base64
-import urlparse
+import urllib.parse
 import requests
 
 def _validate_user(username, email, sso_mode, org_id, groups, remote_addr,
@@ -52,20 +52,27 @@ def _validate_user(username, email, sso_mode, org_id, groups, remote_addr,
             usr.remove()
             old_org_id = usr.org_id
 
-            usr = org.new_user(
+            new_usr = org.new_user(
                 name=usr.name,
                 email=usr.email,
+                pin=usr.pin,
                 type=usr.type,
                 groups=usr.groups,
                 auth_type=usr.auth_type,
                 yubico_id=usr.yubico_id,
                 disabled=usr.disabled,
+                resource_id=usr.resource_id,
                 bypass_secondary=usr.bypass_secondary,
                 client_to_client=usr.client_to_client,
+                mac_addresses=usr.mac_addresses,
                 dns_servers=usr.dns_servers,
                 dns_suffix=usr.dns_suffix,
                 port_forwarding=usr.port_forwarding,
             )
+            new_usr.otp_secret = usr.otp_secret
+
+            usr = new_usr
+            usr.commit()
 
             event.Event(type=ORGS_UPDATED)
             event.Event(type=USERS_UPDATED, resource_id=old_org_id)
@@ -77,7 +84,7 @@ def _validate_user(username, email, sso_mode, org_id, groups, remote_addr,
     if not usr:
         usr = org.new_user(name=username, email=email, type=CERT_CLIENT,
             auth_type=sso_mode, yubico_id=yubico_id,
-            groups=list(groups) if groups else None)
+            groups=list(groups) if groups else [])
         usr.audit_event('user_created', 'User created with single sign-on',
             remote_addr=remote_addr)
 
@@ -98,7 +105,7 @@ def _validate_user(username, email, sso_mode, org_id, groups, remote_addr,
                 user_name=username,
                 remote_address=remote_addr,
                 reason=journal.SSO_AUTH_REASON_INVALID_YUBIKEY,
-                reason_long='Invalid username',
+                reason_long='Invalid yubikey id',
             )
 
             return utils.jsonify({
@@ -116,9 +123,9 @@ def _validate_user(username, email, sso_mode, org_id, groups, remote_addr,
             usr.yubico_id = yubico_id
             usr.commit('yubico_id')
 
-        if groups and groups - set(usr.groups or []):
+        if groups and groups != set(usr.groups or []):
             changed = True
-            usr.groups = list(set(usr.groups or []) | groups)
+            usr.groups = list(groups)
             usr.commit('groups')
 
         if usr.auth_type != sso_mode:
@@ -126,10 +133,17 @@ def _validate_user(username, email, sso_mode, org_id, groups, remote_addr,
             usr.auth_type = sso_mode
             usr.commit('auth_type')
 
-        usr.clear_auth_cache()
-        usr.disconnect()
-
         if changed:
+            journal.entry(
+                journal.SSO_AUTH_UPDATE,
+                user_name=username,
+                remote_address=remote_addr,
+                reason=journal.SSO_AUTH_REASON_MODIFIED,
+                reason_long='User sso attributes modified',
+            )
+
+            usr.clear_auth_cache()
+            usr.disconnect()
             event.Event(type=USERS_UPDATED, resource_id=org.id)
 
     key_link = org.create_user_key_link(usr.id, one_time=True)
@@ -142,7 +156,7 @@ def _validate_user(username, email, sso_mode, org_id, groups, remote_addr,
     journal.entry(
         journal.SSO_AUTH_SUCCESS,
         usr.journal_data,
-        key_id_hash=hashlib.md5(key_link['id']).hexdigest(),
+        key_id_hash=utils.unsafe_md5(key_link['id'].encode()).hexdigest(),
         remote_address=remote_addr,
     )
 
@@ -246,7 +260,9 @@ def sso_request_get():
             SLACK_AUTH, SLACK_DUO_AUTH, SLACK_YUBICO_AUTH, SAML_AUTH,
             SAML_DUO_AUTH, SAML_YUBICO_AUTH, SAML_OKTA_AUTH,
             SAML_OKTA_DUO_AUTH, SAML_OKTA_YUBICO_AUTH, SAML_ONELOGIN_AUTH,
-            SAML_ONELOGIN_DUO_AUTH, SAML_ONELOGIN_YUBICO_AUTH):
+            SAML_ONELOGIN_DUO_AUTH, SAML_ONELOGIN_YUBICO_AUTH,
+            SAML_JUMPCLOUD_AUTH, SAML_JUMPCLOUD_DUO_AUTH,
+            SAML_JUMPCLOUD_YUBICO_AUTH):
         return flask.abort(404)
 
     state = utils.rand_str(64)
@@ -270,6 +286,7 @@ def sso_request_get():
                 'callback': callback,
                 'state': state,
                 'secret': secret,
+                'region': settings.app.sso_azure_region or '',
                 'directory_id': settings.app.sso_azure_directory_id,
                 'app_id': settings.app.sso_azure_app_id,
                 'app_secret': settings.app.sso_azure_app_secret,
@@ -277,7 +294,8 @@ def sso_request_get():
         )
 
         if resp.status_code != 200:
-            logger.error('Azure auth server error', 'sso',
+            logger.error('Azure auth server error, ' +
+                'check https://docs.pritunl.com/kb/vpn/outage', 'sso',
                 status_code=resp.status_code,
                 content=resp.content,
             )
@@ -288,7 +306,7 @@ def sso_request_get():
             return flask.abort(500)
 
         tokens_collection = mongo.get_collection('sso_tokens')
-        tokens_collection.insert({
+        tokens_collection.insert_one({
             '_id': state,
             'type': AZURE_AUTH,
             'secret': secret,
@@ -313,7 +331,8 @@ def sso_request_get():
         )
 
         if resp.status_code != 200:
-            logger.error('Google auth server error', 'sso',
+            logger.error('Google auth server error, ' +
+                'check https://docs.pritunl.com/kb/vpn/outage', 'sso',
                 status_code=resp.status_code,
                 content=resp.content,
             )
@@ -324,7 +343,7 @@ def sso_request_get():
             return flask.abort(500)
 
         tokens_collection = mongo.get_collection('sso_tokens')
-        tokens_collection.insert({
+        tokens_collection.insert_one({
             '_id': state,
             'type': GOOGLE_AUTH,
             'secret': secret,
@@ -352,7 +371,8 @@ def sso_request_get():
         )
 
         if resp.status_code != 200:
-            logger.error('Auth0 auth server error', 'sso',
+            logger.error('Auth0 auth server error, ' +
+                'check https://docs.pritunl.com/kb/vpn/outage', 'sso',
                 status_code=resp.status_code,
                 content=resp.content,
             )
@@ -363,7 +383,7 @@ def sso_request_get():
             return flask.abort(500)
 
         tokens_collection = mongo.get_collection('sso_tokens')
-        tokens_collection.insert({
+        tokens_collection.insert_one({
             '_id': state,
             'type': AUTHZERO_AUTH,
             'secret': secret,
@@ -388,7 +408,8 @@ def sso_request_get():
         )
 
         if resp.status_code != 200:
-            logger.error('Slack auth server error', 'sso',
+            logger.error('Slack auth server error, ' +
+                'check https://docs.pritunl.com/kb/vpn/outage', 'sso',
                 status_code=resp.status_code,
                 content=resp.content,
             )
@@ -399,7 +420,7 @@ def sso_request_get():
             return flask.abort(500)
 
         tokens_collection = mongo.get_collection('sso_tokens')
-        tokens_collection.insert({
+        tokens_collection.insert_one({
             '_id': state,
             'type': SLACK_AUTH,
             'secret': secret,
@@ -427,7 +448,8 @@ def sso_request_get():
         )
 
         if resp.status_code != 200:
-            logger.error('Saml auth server error', 'sso',
+            logger.error('Saml auth server error, ' +
+                'check https://docs.pritunl.com/kb/vpn/outage', 'sso',
                 status_code=resp.status_code,
                 content=resp.content,
             )
@@ -438,7 +460,7 @@ def sso_request_get():
             return flask.abort(500)
 
         tokens_collection = mongo.get_collection('sso_tokens')
-        tokens_collection.insert({
+        tokens_collection.insert_one({
             '_id': state,
             'type': SAML_AUTH,
             'secret': secret,
@@ -465,7 +487,9 @@ def sso_callback_get():
             SLACK_AUTH, SLACK_DUO_AUTH, SLACK_YUBICO_AUTH, SAML_AUTH,
             SAML_DUO_AUTH, SAML_YUBICO_AUTH, SAML_OKTA_AUTH,
             SAML_OKTA_DUO_AUTH, SAML_OKTA_YUBICO_AUTH, SAML_ONELOGIN_AUTH,
-            SAML_ONELOGIN_DUO_AUTH, SAML_ONELOGIN_YUBICO_AUTH):
+            SAML_ONELOGIN_DUO_AUTH, SAML_ONELOGIN_YUBICO_AUTH,
+            SAML_JUMPCLOUD_AUTH, SAML_JUMPCLOUD_DUO_AUTH,
+            SAML_JUMPCLOUD_YUBICO_AUTH):
         return flask.abort(405)
 
     remote_addr = utils.get_remote_addr()
@@ -473,16 +497,16 @@ def sso_callback_get():
     sig = flask.request.args.get('sig')
 
     tokens_collection = mongo.get_collection('sso_tokens')
-    doc = tokens_collection.find_and_modify(query={
+    doc = tokens_collection.find_one_and_delete({
         '_id': state,
-    }, remove=True)
+    })
 
     if not doc:
         return flask.abort(404)
 
-    query = flask.request.query_string.split('&sig=')[0]
-    test_sig = base64.urlsafe_b64encode(hmac.new(str(doc['secret']),
-        query, hashlib.sha512).digest())
+    query = flask.request.query_string.split('&sig='.encode())[0]
+    test_sig = base64.urlsafe_b64encode(hmac.new(str(doc['secret']).encode(),
+        query, hashlib.sha512).digest()).decode()
     if not utils.const_compare(sig, test_sig):
         journal.entry(
             journal.SSO_AUTH_FAILURE,
@@ -493,7 +517,7 @@ def sso_callback_get():
         )
         return flask.abort(401)
 
-    params = urlparse.parse_qs(query)
+    params = urllib.parse.parse_qs(query.decode())
 
     if doc.get('type') == SAML_AUTH:
         username = params.get('username')[0]
@@ -506,7 +530,7 @@ def sso_callback_get():
                 org_names = org_names_param.split(';')
             else:
                 org_names = org_names_param.split(',')
-            org_names = [x for x in org_names if x]
+            org_names = [utils.filter_unicode(x) for x in org_names if x]
         org_names = sorted(org_names)
 
         groups = []
@@ -516,7 +540,7 @@ def sso_callback_get():
                 groups = groups_param.split(';')
             else:
                 groups = groups_param.split(',')
-            groups = [x for x in groups if x]
+            groups = [utils.filter_unicode(x) for x in groups if x]
         groups = set(groups)
 
         if not username:
@@ -527,7 +551,7 @@ def sso_callback_get():
             not_found = False
             for org_name in org_names:
                 org = organization.get_by_name(
-                    utils.filter_unicode(org_name),
+                    org_name,
                     fields=('_id'),
                 )
                 if org:
@@ -552,6 +576,7 @@ def sso_callback_get():
             user_email=email,
             remote_ip=remote_addr,
             sso_org_names=org_names,
+            sso_group_names=groups,
         )
         if valid:
             org_id = org_id_new or org_id
@@ -576,7 +601,8 @@ def sso_callback_get():
         email = None
         user_team = params.get('team')[0]
         org_names = params.get('orgs', [''])[0]
-        org_names = sorted(org_names.split(','))
+        org_names = org_names.split(',')
+        org_names = [utils.filter_unicode(x) for x in org_names]
 
         if user_team != settings.app.sso_match[0]:
             journal.entry(
@@ -593,7 +619,7 @@ def sso_callback_get():
         org_id = settings.app.sso_org
         for org_name in org_names:
             org = organization.get_by_name(
-                utils.filter_unicode(org_name),
+                org_name,
                 fields=('_id'),
             )
             if org:
@@ -659,6 +685,7 @@ def sso_callback_get():
             user_name=username,
             user_email=email,
             remote_ip=remote_addr,
+            sso_group_names=google_groups,
         )
         if valid:
             org_id = org_id_new or org_id
@@ -685,7 +712,7 @@ def sso_callback_get():
             google_groups = sorted(google_groups)
             for org_name in google_groups:
                 org = organization.get_by_name(
-                    utils.filter_unicode(org_name),
+                    org_name,
                     fields=('_id'),
                 )
                 if org:
@@ -743,6 +770,7 @@ def sso_callback_get():
             user_name=username,
             user_email=email,
             remote_ip=remote_addr,
+            sso_group_names=azure_groups,
         )
         if valid:
             org_id = org_id_new or org_id
@@ -769,7 +797,7 @@ def sso_callback_get():
             azure_groups = sorted(azure_groups)
             for org_name in azure_groups:
                 org = organization.get_by_name(
-                    utils.filter_unicode(org_name),
+                    org_name,
                     fields=('_id'),
                 )
                 if org:
@@ -789,7 +817,10 @@ def sso_callback_get():
                 )
     elif doc.get('type') == AUTHZERO_AUTH:
         username = params.get('username')[0]
-        email = None
+        if params.get('email'):
+            email = params.get('email')[0]
+        else:
+            email = None
 
         valid, authzero_groups = sso.verify_authzero(username)
         if not valid:
@@ -836,7 +867,7 @@ def sso_callback_get():
             authzero_groups = sorted(authzero_groups)
             for org_name in authzero_groups:
                 org = organization.get_by_name(
-                    utils.filter_unicode(org_name),
+                    org_name,
                     fields=('_id'),
                 )
                 if org:
@@ -864,7 +895,7 @@ def sso_callback_get():
         token = utils.generate_secret()
 
         tokens_collection = mongo.get_collection('sso_tokens')
-        tokens_collection.insert({
+        tokens_collection.insert_one({
             '_id': token,
             'type': DUO_AUTH,
             'username': username,
@@ -892,6 +923,8 @@ def sso_callback_get():
         duo_page.data = duo_page.data.replace('<%= body_class %>', body_class)
         duo_page.data = duo_page.data.replace('<%= token %>', token)
         duo_page.data = duo_page.data.replace('<%= duo_mode %>', duo_mode)
+        duo_page.data = duo_page.data.replace(
+            '<%= post_path %>', '/sso/duo')
 
         return duo_page.get_response()
 
@@ -899,7 +932,7 @@ def sso_callback_get():
         token = utils.generate_secret()
 
         tokens_collection = mongo.get_collection('sso_tokens')
-        tokens_collection.insert({
+        tokens_collection.insert_one({
             '_id': token,
             'type': YUBICO_AUTH,
             'username': username,
@@ -916,6 +949,8 @@ def sso_callback_get():
             yubico_page.data = yubico_page.data.replace(
                 '<body>', '<body class="dark">')
         yubico_page.data = yubico_page.data.replace('<%= token %>', token)
+        yubico_page.data = yubico_page.data.replace(
+            '<%= post_path %>', '/sso/yubico')
 
         return yubico_page.get_response()
 
@@ -932,7 +967,8 @@ def sso_duo_post():
 
     if sso_mode not in (DUO_AUTH, AZURE_DUO_AUTH, GOOGLE_DUO_AUTH,
             SLACK_DUO_AUTH, SAML_DUO_AUTH, SAML_OKTA_DUO_AUTH,
-            SAML_ONELOGIN_DUO_AUTH, RADIUS_DUO_AUTH):
+            SAML_ONELOGIN_DUO_AUTH, SAML_JUMPCLOUD_DUO_AUTH,
+            RADIUS_DUO_AUTH):
         return flask.abort(404)
 
     if not token:
@@ -942,9 +978,9 @@ def sso_duo_post():
         }, 401)
 
     tokens_collection = mongo.get_collection('sso_tokens')
-    doc = tokens_collection.find_and_modify(query={
+    doc = tokens_collection.find_one_and_delete({
         '_id': token,
-    }, remove=True)
+    })
     if not doc or doc['_id'] != token or doc['type'] != DUO_AUTH:
         journal.entry(
             journal.SSO_AUTH_FAILURE,
@@ -1052,7 +1088,8 @@ def sso_yubico_post():
 
     if sso_mode not in (AZURE_YUBICO_AUTH, GOOGLE_YUBICO_AUTH,
             AUTHZERO_YUBICO_AUTH, SLACK_YUBICO_AUTH, SAML_YUBICO_AUTH,
-            SAML_OKTA_YUBICO_AUTH, SAML_ONELOGIN_YUBICO_AUTH):
+            SAML_OKTA_YUBICO_AUTH, SAML_ONELOGIN_YUBICO_AUTH,
+            SAML_JUMPCLOUD_YUBICO_AUTH):
         return flask.abort(404)
 
     if not token or not key:
@@ -1062,9 +1099,9 @@ def sso_yubico_post():
         }, 401)
 
     tokens_collection = mongo.get_collection('sso_tokens')
-    doc = tokens_collection.find_and_modify(query={
+    doc = tokens_collection.find_one_and_delete({
         '_id': token,
-    }, remove=True)
+    })
     if not doc or doc['_id'] != token or doc['type'] != YUBICO_AUTH:
         journal.entry(
             journal.SSO_AUTH_FAILURE,

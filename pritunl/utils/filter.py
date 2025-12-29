@@ -1,4 +1,5 @@
-from pritunl.utils.misc import ObjectId, filter_str
+from pritunl.utils.misc import filter_str
+from pritunl import database
 
 import flask
 
@@ -38,11 +39,11 @@ def json_opt_bool(key):
     return None if val is None else bool(val)
 
 def json_oid(key):
-    return ObjectId(flask.request.json[key])
+    return database.ObjectId(flask.request.json[key])
 
 def json_opt_oid(key):
     val = flask.request.json.get(key)
-    return None if val is None else ObjectId(val)
+    return None if val is None else database.ObjectId(val)
 
 def session_int(key):
     return int(flask.session.get(key))
@@ -56,4 +57,6 @@ def session_str(key):
 
 def session_opt_str(key):
     val = flask.session.get(key)
+    if isinstance(val, bytes):
+        val = val.decode()
     return None if val is None else str(val)

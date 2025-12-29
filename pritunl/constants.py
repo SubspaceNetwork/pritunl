@@ -74,6 +74,8 @@ MONGO_ACTION_METHODS = {
     'upsert',
 }
 
+AWS_TOKEN_URL = 'http://169.254.169.254/latest/api/token'
+AWS_METADATA_BASE = 'http://169.254.169.254/latest/meta-data/'
 AWS_REGIONS = {
     'us-east-1',
     'us-east-2',
@@ -93,6 +95,7 @@ AWS_REGIONS = {
     'ap-northeast-2',
     'ap-southeast-1',
     'ap-southeast-2',
+    'ap-southeast-3',
     'ap-east-1',
     'ap-south-1',
     'sa-east-1',
@@ -103,9 +106,19 @@ DISABLED = 'disabled'
 
 NAME_SAFE_CHARS = {
     '-', '=', '_', '@', '.', ':', '/',
-    '!', '#', '$', '%', '&', '*', '+',
-    '?', '^', '`', '{', '|', '}', '~',
+    '!', '#', '$', '&', '*', '+',
+    '?', '^', '|', '~',
 }
+
+NAME_SAFE_CHARS2 = {
+    '-', '_',
+}
+
+PATH_SAFE_CHARS = {
+    '-', '_', '.', '/',
+}
+
+BASE64_SAFE_CHARS = {'+', '/', '='}
 
 VALID_CHARS = {
     'a', 'b', 'c', 'd', 'e', 'f', 'g',
@@ -135,116 +148,6 @@ INVALID_NAMES = {
     'inactive',
     'error',
 }
-
-LETS_ENCRYPT_INTER = """
------BEGIN CERTIFICATE-----
-MIIEqDCCA5CgAwIBAgIRAJgT9HUT5XULQ+dDHpceRL0wDQYJKoZIhvcNAQELBQAw
-PzEkMCIGA1UEChMbRGlnaXRhbCBTaWduYXR1cmUgVHJ1c3QgQ28uMRcwFQYDVQQD
-Ew5EU1QgUm9vdCBDQSBYMzAeFw0xNTEwMTkyMjMzMzZaFw0yMDEwMTkyMjMzMzZa
-MEoxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MSMwIQYDVQQD
-ExpMZXQncyBFbmNyeXB0IEF1dGhvcml0eSBYMTCCASIwDQYJKoZIhvcNAQEBBQAD
-ggEPADCCAQoCggEBAJzTDPBa5S5Ht3JdN4OzaGMw6tc1Jhkl4b2+NfFwki+3uEtB
-BaupnjUIWOyxKsRohwuj43Xk5vOnYnG6eYFgH9eRmp/z0HhncchpDpWRz/7mmelg
-PEjMfspNdxIknUcbWuu57B43ABycrHunBerOSuu9QeU2mLnL/W08lmjfIypCkAyG
-dGfIf6WauFJhFBM/ZemCh8vb+g5W9oaJ84U/l4avsNwa72sNlRZ9xCugZbKZBDZ1
-gGusSvMbkEl4L6KWTyogJSkExnTA0DHNjzE4lRa6qDO4Q/GxH8Mwf6J5MRM9LTb4
-4/zyM2q5OTHFr8SNDR1kFjOq+oQpttQLwNh9w5MCAwEAAaOCAZIwggGOMBIGA1Ud
-EwEB/wQIMAYBAf8CAQAwDgYDVR0PAQH/BAQDAgGGMH8GCCsGAQUFBwEBBHMwcTAy
-BggrBgEFBQcwAYYmaHR0cDovL2lzcmcudHJ1c3RpZC5vY3NwLmlkZW50cnVzdC5j
-b20wOwYIKwYBBQUHMAKGL2h0dHA6Ly9hcHBzLmlkZW50cnVzdC5jb20vcm9vdHMv
-ZHN0cm9vdGNheDMucDdjMB8GA1UdIwQYMBaAFMSnsaR7LHH62+FLkHX/xBVghYkQ
-MFQGA1UdIARNMEswCAYGZ4EMAQIBMD8GCysGAQQBgt8TAQEBMDAwLgYIKwYBBQUH
-AgEWImh0dHA6Ly9jcHMucm9vdC14MS5sZXRzZW5jcnlwdC5vcmcwPAYDVR0fBDUw
-MzAxoC+gLYYraHR0cDovL2NybC5pZGVudHJ1c3QuY29tL0RTVFJPT1RDQVgzQ1JM
-LmNybDATBgNVHR4EDDAKoQgwBoIELm1pbDAdBgNVHQ4EFgQUqEpqYwR93brm0Tm3
-pkVl7/Oo7KEwDQYJKoZIhvcNAQELBQADggEBANHIIkus7+MJiZZQsY14cCoBG1hd
-v0J20/FyWo5ppnfjL78S2k4s2GLRJ7iD9ZDKErndvbNFGcsW+9kKK/TnY21hp4Dd
-ITv8S9ZYQ7oaoqs7HwhEMY9sibED4aXw09xrJZTC9zK1uIfW6t5dHQjuOWv+HHoW
-ZnupyxpsEUlEaFb+/SCI4KCSBdAsYxAcsHYI5xxEI4LutHp6s3OT2FuO90WfdsIk
-6q78OMSdn875bNjdBYAqxUp2/LEIHfDBkLoQz0hFJmwAbYahqKaLn73PAAm1X2kj
-f1w8DdnkabOLGeOVcj9LQ+s67vBykx4anTjURkbqZslUEUsn2k5xeua2zUk=
------END CERTIFICATE-----
------BEGIN CERTIFICATE-----
-MIIEqDCCA5CgAwIBAgIRAMODTJjAvWslLKN5tm+lKw4wDQYJKoZIhvcNAQELBQAw
-PzEkMCIGA1UEChMbRGlnaXRhbCBTaWduYXR1cmUgVHJ1c3QgQ28uMRcwFQYDVQQD
-Ew5EU1QgUm9vdCBDQSBYMzAeFw0xNTEwMTkyMjM1MDFaFw0yMDEwMTkyMjM1MDFa
-MEoxCzAJBgNVBAYTAlVTMRYwFAYDVQQKEw1MZXQncyBFbmNyeXB0MSMwIQYDVQQD
-ExpMZXQncyBFbmNyeXB0IEF1dGhvcml0eSBYMjCCASIwDQYJKoZIhvcNAQEBBQAD
-ggEPADCCAQoCggEBAOEkdEJ7t5Ex2XP/OKrYzkRctzkK3ESuDb1FuZc3Z6+9UE9f
-0xBUa/dB2o5j5m1bwOhAqYxB/NEDif9iYQlg1gcFeJqQvRpkPk/cz3cviWvLZ69B
-TcWNAMBr/o2E3LXylTGo6PaQoENKk3Rcsz5DaUuJIkd0UT6ZZMPNJAH5hC8odxci
-p93DbAhMZi83dMVvk46wRjcWYdFQmMiwD09YU3ys9totlmFQrUPcCqZPnrVSuZyO
-707fRrMx3CD8acKjIHU+7DgbNk5mZtLf9Wakky97pg6UPmA9Skscb7q0TRw8kVhu
-L03E2nDb7QE5dsBJ5+k1tRQGkMHlkuIQ/Wu5tIUCAwEAAaOCAZIwggGOMBIGA1Ud
-EwEB/wQIMAYBAf8CAQAwDgYDVR0PAQH/BAQDAgGGMH8GCCsGAQUFBwEBBHMwcTAy
-BggrBgEFBQcwAYYmaHR0cDovL2lzcmcudHJ1c3RpZC5vY3NwLmlkZW50cnVzdC5j
-b20wOwYIKwYBBQUHMAKGL2h0dHA6Ly9hcHBzLmlkZW50cnVzdC5jb20vcm9vdHMv
-ZHN0cm9vdGNheDMucDdjMB8GA1UdIwQYMBaAFMSnsaR7LHH62+FLkHX/xBVghYkQ
-MFQGA1UdIARNMEswCAYGZ4EMAQIBMD8GCysGAQQBgt8TAQEBMDAwLgYIKwYBBQUH
-AgEWImh0dHA6Ly9jcHMucm9vdC14MS5sZXRzZW5jcnlwdC5vcmcwPAYDVR0fBDUw
-MzAxoC+gLYYraHR0cDovL2NybC5pZGVudHJ1c3QuY29tL0RTVFJPT1RDQVgzQ1JM
-LmNybDATBgNVHR4EDDAKoQgwBoIELm1pbDAdBgNVHQ4EFgQUxbGrTkyxzWQwk37B
-hJkFq+YD4iUwDQYJKoZIhvcNAQELBQADggEBAAcSAhaE7rvHxyUnhgkEpMR56o2I
-IH+mlw5kknjhAuvaBIAM59MZkFbFg5CrNWt8K+G3UoxJgFwv7HvJJxqwgPpNgXC/
-uT3prkvwt+2lvzKJKbqdH+lo40P8EuSyyJOz2hjrRzNMHbJHYDS9OhF5WC5LOQQa
-ydgLZ/JHxXgJypEZqcmVgQ+yYBs0XPwXjE7OE8vbx5REwu7gToMIqAoWRoWW2MxS
-g28RGPVnHzHk2XV1nZGy9T+NYQ91vWWJr1pzNEFZ0cnA2xGwTeJ+zZ3URCfw3Z1U
-+YAL3YUmrvdoRBlASOTmNJmXSo9qvMYPa3DEomAPoFQFZqsSN6kuqDEIqMA=
------END CERTIFICATE-----
------BEGIN CERTIFICATE-----
-MIIEkjCCA3qgAwIBAgIQCgFBQgAAAVOFc2oLheynCDANBgkqhkiG9w0BAQsFADA/
-MSQwIgYDVQQKExtEaWdpdGFsIFNpZ25hdHVyZSBUcnVzdCBDby4xFzAVBgNVBAMT
-DkRTVCBSb290IENBIFgzMB4XDTE2MDMxNzE2NDA0NloXDTIxMDMxNzE2NDA0Nlow
-SjELMAkGA1UEBhMCVVMxFjAUBgNVBAoTDUxldCdzIEVuY3J5cHQxIzAhBgNVBAMT
-GkxldCdzIEVuY3J5cHQgQXV0aG9yaXR5IFgzMIIBIjANBgkqhkiG9w0BAQEFAAOC
-AQ8AMIIBCgKCAQEAnNMM8FrlLke3cl03g7NoYzDq1zUmGSXhvb418XCSL7e4S0EF
-q6meNQhY7LEqxGiHC6PjdeTm86dicbp5gWAf15Gan/PQeGdxyGkOlZHP/uaZ6WA8
-SMx+yk13EiSdRxta67nsHjcAHJyse6cF6s5K671B5TaYucv9bTyWaN8jKkKQDIZ0
-Z8h/pZq4UmEUEz9l6YKHy9v6Dlb2honzhT+Xhq+w3Brvaw2VFn3EK6BlspkENnWA
-a6xK8xuQSXgvopZPKiAlKQTGdMDQMc2PMTiVFrqoM7hD8bEfwzB/onkxEz0tNvjj
-/PIzark5McWvxI0NHWQWM6r6hCm21AvA2H3DkwIDAQABo4IBfTCCAXkwEgYDVR0T
-AQH/BAgwBgEB/wIBADAOBgNVHQ8BAf8EBAMCAYYwfwYIKwYBBQUHAQEEczBxMDIG
-CCsGAQUFBzABhiZodHRwOi8vaXNyZy50cnVzdGlkLm9jc3AuaWRlbnRydXN0LmNv
-bTA7BggrBgEFBQcwAoYvaHR0cDovL2FwcHMuaWRlbnRydXN0LmNvbS9yb290cy9k
-c3Ryb290Y2F4My5wN2MwHwYDVR0jBBgwFoAUxKexpHsscfrb4UuQdf/EFWCFiRAw
-VAYDVR0gBE0wSzAIBgZngQwBAgEwPwYLKwYBBAGC3xMBAQEwMDAuBggrBgEFBQcC
-ARYiaHR0cDovL2Nwcy5yb290LXgxLmxldHNlbmNyeXB0Lm9yZzA8BgNVHR8ENTAz
-MDGgL6AthitodHRwOi8vY3JsLmlkZW50cnVzdC5jb20vRFNUUk9PVENBWDNDUkwu
-Y3JsMB0GA1UdDgQWBBSoSmpjBH3duubRObemRWXv86jsoTANBgkqhkiG9w0BAQsF
-AAOCAQEA3TPXEfNjWDjdGBX7CVW+dla5cEilaUcne8IkCJLxWh9KEik3JHRRHGJo
-uM2VcGfl96S8TihRzZvoroed6ti6WqEBmtzw3Wodatg+VyOeph4EYpr/1wXKtx8/
-wApIvJSwtmVi4MFU5aMqrSDE6ea73Mj2tcMyo5jMd6jmeWUHK8so/joWUoHOUgwu
-X4Po1QYz+3dszkDqMp4fklxBwXRsW10KXzPMTZ+sOPAveyxindmjkW8lGy+QsRlG
-PfZ+G6Z6h7mjem0Y+iWlkYcV4PIWL1iwBi8saCbGS5jN2p8M+X+Q7UNKEkROb3N6
-KOqkqm57TH2H3eDJAkSnh6/DNFu0Qg==
------END CERTIFICATE-----
------BEGIN CERTIFICATE-----
-MIIEkjCCA3qgAwIBAgIQCgFBQgAAAVOFc6bLEeMfizANBgkqhkiG9w0BAQsFADA/
-MSQwIgYDVQQKExtEaWdpdGFsIFNpZ25hdHVyZSBUcnVzdCBDby4xFzAVBgNVBAMT
-DkRTVCBSb290IENBIFgzMB4XDTE2MDMxNzE2NDEwMloXDTIxMDMxNzE2NDEwMlow
-SjELMAkGA1UEBhMCVVMxFjAUBgNVBAoTDUxldCdzIEVuY3J5cHQxIzAhBgNVBAMT
-GkxldCdzIEVuY3J5cHQgQXV0aG9yaXR5IFg0MIIBIjANBgkqhkiG9w0BAQEFAAOC
-AQ8AMIIBCgKCAQEA4SR0Qnu3kTHZc/84qtjORFy3OQrcRK4NvUW5lzdnr71QT1/T
-EFRr90HajmPmbVvA6ECpjEH80QOJ/2JhCWDWBwV4mpC9GmQ+T9zPdy+Ja8tnr0FN
-xY0AwGv+jYTctfKVMajo9pCgQ0qTdFyzPkNpS4kiR3RRPplkw80kAfmELyh3FyKn
-3cNsCExmLzd0xW+TjrBGNxZh0VCYyLAPT1hTfKz22i2WYVCtQ9wKpk+etVK5nI7v
-Tt9GszHcIPxpwqMgdT7sOBs2TmZm0t/1ZqSTL3umDpQ+YD1KSxxvurRNHDyRWG4v
-TcTacNvtATl2wEnn6TW1FAaQweWS4hD9a7m0hQIDAQABo4IBfTCCAXkwEgYDVR0T
-AQH/BAgwBgEB/wIBADAOBgNVHQ8BAf8EBAMCAYYwfwYIKwYBBQUHAQEEczBxMDIG
-CCsGAQUFBzABhiZodHRwOi8vaXNyZy50cnVzdGlkLm9jc3AuaWRlbnRydXN0LmNv
-bTA7BggrBgEFBQcwAoYvaHR0cDovL2FwcHMuaWRlbnRydXN0LmNvbS9yb290cy9k
-c3Ryb290Y2F4My5wN2MwHwYDVR0jBBgwFoAUxKexpHsscfrb4UuQdf/EFWCFiRAw
-VAYDVR0gBE0wSzAIBgZngQwBAgEwPwYLKwYBBAGC3xMBAQEwMDAuBggrBgEFBQcC
-ARYiaHR0cDovL2Nwcy5yb290LXgxLmxldHNlbmNyeXB0Lm9yZzA8BgNVHR8ENTAz
-MDGgL6AthitodHRwOi8vY3JsLmlkZW50cnVzdC5jb20vRFNUUk9PVENBWDNDUkwu
-Y3JsMB0GA1UdDgQWBBTFsatOTLHNZDCTfsGEmQWr5gPiJTANBgkqhkiG9w0BAQsF
-AAOCAQEANlaeSdstfAtqFN3jdRZJFjx9X+Ob3PIDlekPYQ1OQ1Uw43rE1FUj7hUw
-g2MJKfs9b7M0WoQg7C20nJY/ajsg7pWhUG3J6rlkDTfVY9faeWi0qsPYXE6BpBDr
-5BrW/Xv8yT8U2BiEAmNggWq8dmFl82fghmLzHBM8X8NZ3ZwA1fGePA53AP5IoD+0
-ArpW8Ik1sSuQBjZ8oQLfN+G8OoY7MNRopyLyQQCNy4aWfE+xYnoVoa5+yr+aPiX0
-7YQrY/cKawAn7QB4PyF5//IKSAVs7mAuB68wbMdE3FKfOHfJ24W4z/bIJTrTY8Y5
-Sr4AUhtzf8oVDrHZYWRrP4joIcOu/Q==
------END CERTIFICATE-----"""
 
 RADIUS_DICTONARY = """ATTRIBUTE	User-Name					1	string
 ATTRIBUTE	User-Password				2	string
@@ -438,6 +341,33 @@ DEMO_ADMIN_AUDIT_EVENTS = [
     },
 ]
 
+DEMO_UNREGISTERED_DEVICES = [
+    {
+        "id": "591ac2693eff2141a2182bec",
+        "org_id": "59875e033eff21276da0f0b9",
+        "user_id": "59875e053eff21276da0f0f3",
+        "user_name": "user1@domain.com",
+        "name": "macbook",
+        "platform": "darwin",
+    },
+    {
+        "id": "591ac2693eff2141a2182bef",
+        "org_id": "59875e033eff21276da0f0b9",
+        "user_id": "61c2320bf8e0d6a61a08a168",
+        "user_name": "user2@domain.com",
+        "name": "windows-latop",
+        "platform": "win",
+    },
+    {
+        "id": "591ac2693eff2141a2182bf2",
+        "org_id": "59875e033eff21276da0f0b9",
+        "user_id": "61c4498ff43304a36562119c",
+        "user_name": "user3@domain.com",
+        "name": "linux-desktop",
+        "platform": "linux",
+    },
+]
+
 DEMO_LOGS = [
     '[us-east][2016-03-08 04:35:40,616][INFO] Starting server',
     '[us-west][2016-03-08 04:35:56,616][INFO] Starting server',
@@ -470,6 +400,8 @@ GROUP_LOCAL = 'local'
 DEFAULT_USERNAME = 'pritunl'
 DEFAULT_PASSWORD = 'pritunl'
 DEFAULT_CONF_PATH = '/etc/pritunl.conf'
+SYSTEMD_WEB_SERVICE = 'pritunl-web.service'
+SYSTEMD_WEB_ENV_PATH = '/var/lib/pritunl/pritunl_web_env'
 SUBSCRIPTION_UPDATE_RATE = 900
 SUB_RESPONSE_TIMEOUT = 10
 CLIENT_CONF_VER = 1
@@ -485,7 +417,7 @@ IP_REGEX = r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}'
 VALID_DH_PARAM_BITS = (1024, 1536, 2048, 3072, 4096)
 AUTH_SERVER = 'https://auth.pritunl.com'
 ONELOGIN_URL = 'https://api.onelogin.com'
-NTP_SERVER = 'ntp.ubuntu.com'
+JUMPCLOUD_URL = 'https://console.jumpcloud.com'
 STATIC_FILE_EXTENSIONS = {
     '.css',
     '.eot',
@@ -506,6 +438,7 @@ MOBILE_PLATFORMS = {
 }
 DESKTOP_PLATFORMS = {
     'linux',
+    'freebsd',
     'mac',
     'win',
     'chrome',
@@ -522,6 +455,7 @@ INDEX_NAME = 'index'
 INDEX_ATTR_NAME = 'index.attr'
 SERIAL_NAME = 'serial'
 OVPN_CONF_NAME = 'openvpn.conf'
+WG_PRIVATE_KEY_NAME = 'wg_private.key'
 OVPN_CA_NAME = 'ca.crt'
 DH_PARAM_NAME = 'dh_param.pem'
 TLS_AUTH_NAME = 'tls_auth.key'
@@ -543,6 +477,7 @@ UPGRADE_NAME = 'upgrade.html'
 CONF_TEMP_EXT = '.tmp'
 LOG_ARCHIVE_NAME = 'pritunl_log'
 SHUT_DOWN = 'shut_down'
+USER_AGENT = 'Mozilla/5.0 (Python 3.9) Pritunl/1.32'
 
 CERT_CA = 'ca'
 CERT_SERVER = 'server'
@@ -579,9 +514,39 @@ SAML_OKTA_YUBICO_AUTH = 'saml_okta_yubico'
 SAML_ONELOGIN_AUTH = 'saml_onelogin'
 SAML_ONELOGIN_DUO_AUTH = 'saml_onelogin_duo'
 SAML_ONELOGIN_YUBICO_AUTH = 'saml_onelogin_yubico'
+SAML_JUMPCLOUD_AUTH = 'saml_jumpcloud'
+SAML_JUMPCLOUD_DUO_AUTH = 'saml_jumpcloud_duo'
+SAML_JUMPCLOUD_YUBICO_AUTH = 'saml_jumpcloud_yubico'
 RADIUS_AUTH = 'radius'
 RADIUS_DUO_AUTH = 'radius_duo'
 PLUGIN_AUTH = 'plugin'
+
+SAML_SSO = 'saml'
+GOOGLE_SSO = 'google'
+AZURE_SSO = 'azure'
+AUTHZERO_SSO = 'authzero'
+SLACK_SSO = 'slack'
+OKTA_SSO = 'okta'
+ONELOGIN_SSO = 'onelogin'
+JUMPCLOUD_SSO = 'jumpcloud'
+RADIUS_SSO = 'radius'
+PLUGIN_SSO = 'plugin'
+
+DUO_PASSCODE = 'duo_passcode'
+OKTA_PASSCODE = 'okta_passcode'
+ONELOGIN_PASSCODE = 'onelogin_passcode'
+YUBICO_PASSCODE = 'yubico'
+OTP_PASSCODE = 'otp'
+
+DUO_PUSH = 'duo_push'
+OKTA_PUSH = 'okta_push'
+ONELOGIN_PUSH = 'onelogin_push'
+
+KEY_REQUEST_AUTH = 'key_request'
+
+PIN = 'pin'
+
+BYPASS_SECONDARY = 'bypass_secondary'
 
 AUTH_TYPES = {
     LOCAL_AUTH,
@@ -608,6 +573,9 @@ AUTH_TYPES = {
     SAML_ONELOGIN_AUTH,
     SAML_ONELOGIN_DUO_AUTH,
     SAML_ONELOGIN_YUBICO_AUTH,
+    SAML_JUMPCLOUD_AUTH,
+    SAML_JUMPCLOUD_DUO_AUTH,
+    SAML_JUMPCLOUD_YUBICO_AUTH,
     RADIUS_AUTH,
     RADIUS_DUO_AUTH,
     PLUGIN_AUTH,
@@ -618,6 +586,7 @@ ADMINS_UPDATED = 'administrators_updated'
 ORGS_UPDATED = 'organizations_updated'
 USERS_UPDATED = 'users_updated'
 LINKS_UPDATED = 'links_updated'
+DEVICES_UPDATED = 'devices_updated'
 LOG_UPDATED = 'log_updated'
 SYSTEM_LOG_UPDATED = 'system_log_updated'
 HOSTS_UPDATED = 'hosts_updated'
@@ -696,7 +665,7 @@ serial = %s
 new_certs_dir = %s
 certificate = %s
 private_key = %s
-default_days = 3652
+default_days = %d
 default_crl_days = 365
 default_md = %s
 policy = ca_policy
@@ -754,6 +723,15 @@ NETWORK_INVALID_MSG = 'Network address is not valid, format must be ' + \
     '"[10,172,192].[0-255,16-31,168].[0-255].0/[8-24]" ' + \
     'such as "10.12.32.0/24".'
 
+NETWORK_WG_INVALID = 'network_wg_invalid'
+NETWORK_WG_INVALID_MSG = 'Network WG address is not valid, format must ' + \
+    'be "[10,172,192].[0-255,16-31,168].[0-255].0/[8-24]" ' + \
+    'such as "10.12.32.0/24".'
+
+NETWORK_WG_CIDR_INVALID = 'network_wg_cidr_invalid'
+NETWORK_WG_CIDR_INVALID_MSG = 'Network WG address must use the same CIDR ' \
+    'as virtual network.'
+
 LINK_NETWORK_INVALID = 'link_network_invalid'
 LINK_NETWORK_INVALID_MSG = 'Network address is invalid, format must be ' + \
     '"10.0.0.0/24".'
@@ -774,6 +752,9 @@ DNS_SERVER_INVALID_MSG = 'DNS server is not valid, ' + \
 
 PORT_INVALID = 'port_invalid'
 PORT_INVALID_MSG = 'Port number is not valid, must be between 1 and 65535.'
+
+PORT_WG_INVALID = 'port_invalid'
+PORT_WG_INVALID_MSG = 'Port number is not valid, must be between 1 and 65535.'
 
 PORT_RESERVED = 'port_reserved'
 PORT_RESERVED_MSG = 'Port number is reserved and cannot be used.'
@@ -844,11 +825,37 @@ YUBIKEY_BYPASS_SECONDARY = 'yubikey_bypass_secondary'
 YUBIKEY_BYPASS_SECONDARY_MSG = 'Cannot set YubiKey with secondary ' + \
     'authentication bypass enabled.'
 
+SSO_USERNAME_MISMATCH = 'username_mismatch'
+SSO_USERNAME_MISMATCH_MSG = 'Single sign-on username changed, profile ' \
+    'must be deleted and imported again.'
+
+SSO_ORGANIZATION_MISMATCH = 'organization_mismatch'
+SSO_ORGANIZATION_MISMATCH_MSG = 'Single sign-on organization changed, ' \
+    'profile must be deleted and imported again.'
+
 NETWORK_IN_USE = 'network_in_use'
 NETWORK_IN_USE_MSG = 'Network address is already in use.'
 
+NETWORK_WG_IN_USE = 'network_WG_in_use'
+NETWORK_WG_IN_USE_MSG = 'Network WG address is already in use.'
+
 PORT_PROTOCOL_IN_USE = 'port_protocol_in_use'
 PORT_PROTOCOL_IN_USE_MSG = 'Port and protocol is already in use.'
+
+BYPASS_SSO_DEVICE_AUTH = 'bypass_sso_device_auth'
+BYPASS_SSO_DEVICE_AUTH_MSG = 'Bypass single sign-on requires ' \
+    'device authentication.'
+
+PING_INTERVAL_TOO_HIGH = 'ping_interval_too_high'
+PING_INTERVAL_TOO_HIGH_MSG = 'Ping interval must be at ' \
+    'least 5 seconds shorter than ping timeout.'
+
+PING_INTERVAL_WG_TOO_HIGH = 'ping_interval_wg_too_high'
+PING_INTERVAL_WG_TOO_HIGH_MSG = 'WireGuard ping interval must be at ' \
+    'least 5 seconds shorter than WireGuard ping timeout.'
+
+PORT_WG_IN_USE = 'port_wg_protocol_in_use'
+PORT_WG_IN_USE_MSG = 'WG Port is already in use.'
 
 BRIDGED_IPV6_INVALID = 'bridged_ipv6_invalid'
 BRIDGED_IPV6_INVALID_MSG = 'IPv6 cannot be used with bridged servers.'
@@ -935,12 +942,23 @@ IPV6_SUBNET_ONLINE = 'ipv6_subnet_online'
 IPV6_SUBNET_ONLINE_MSG = 'IPv6 routed subnet cannot be changed with ' + \
     'IPv6 servers online.'
 
+IPV6_SUBNET_WG_ONLINE = 'ipv6_subnet_wg_online'
+IPV6_SUBNET_WG_ONLINE_MSG = 'IPv6 WG routed subnet cannot be changed ' \
+    'with IPv6 servers online.'
+
 IPV6_SUBNET_INVALID = 'ipv6_subnet_invalid'
 IPV6_SUBNET_INVALID_MSG = 'IPv6 routed subnet is invalid.'
 
+IPV6_SUBNET_WG_INVALID = 'ipv6_subnet_wg_invalid'
+IPV6_SUBNET_WG_INVALID_MSG = 'IPv6 WG routed subnet is invalid.'
+
 IPV6_SUBNET_SIZE_INVALID = 'ipv6_subnet_size_invalid'
-IPV6_SUBNET_SIZE_INVALID_MSG = 'IPv6 routed subnet size is invalid, must ' + \
-    'be at least /64.'
+IPV6_SUBNET_SIZE_INVALID_MSG = 'IPv6 routed subnet size is invalid,' \
+    'must be at least /64.'
+
+IPV6_SUBNET_WG_SIZE_INVALID = 'ipv6_subnet_wg_size_invalid'
+IPV6_SUBNET_WG_SIZE_INVALID_MSG = 'IPv6 WG routed subnet size is invalid,' \
+    'must be at least /64.'
 
 RADIUS_DUO_PASSCODE = 'radius_duo_passcode'
 RADIUS_DUO_PASSCODE_MSG = 'Duo passcode cannot be used with Radius.'
@@ -989,64 +1007,79 @@ REQUIRES_SUPER_USER = 'requires_super_user'
 REQUIRES_SUPER_USER_MSG = 'This administrator action can only be ' + \
     'performed by a super user.'
 
-CANNOT_DISABLE_AUTIDING = 'cannot_disable_autiding'
-CANNOT_DISABLE_AUTIDING_MSG = 'Auditing cannot be disabled from web console.'
+CANNOT_DISABLE_AUDITING = 'cannot_disable_auditing'
+CANNOT_DISABLE_AUDITING_MSG = 'Auditing cannot be disabled from web console.'
 
-RANDOM_ONE = (
-    'snowy',
-    'restless',
-    'calm',
-    'ancient',
-    'summer',
-    'evening',
-    'guarded',
-    'lively',
-    'thawing',
-    'autumn',
-    'thriving',
-    'patient',
-    'winter',
-)
-RANDOM_TWO = (
-    'waterfall',
-    'meadow',
-    'skies',
-    'waves',
-    'fields',
-    'stars',
-    'dreams',
-    'refuge',
-    'forest',
-    'plains',
-    'waters',
-    'plateau',
-    'thunder',
+DEVICE_NOT_FOUND = 'device_not_found'
+DEVICE_NOT_FOUND_MSG = 'Device not found.'
+
+DEVICE_REGISTRATION_KEY_INVALID = 'device_registration_key_invalid'
+DEVICE_REGISTRATION_KEY_INVALID_MSG = 'Device registration key is invalid.'
+
+DEVICE_REGISTRATION_LIMIT = 'device_registration_limit'
+DEVICE_REGISTRATION_LIMIT_MSG = 'Too many invalid device registration ' \
+    'attempts, device removed.'
+
+RANDOM_ELEM = (
+    'copper',
+    'argon',
+    'xenon',
+    'radon',
+    'cobalt',
+    'nickel',
+    'carbon',
+    'helium',
+    'nitrogen',
+    'radium',
+    'lithium',
+    'silicon',
 )
 
 CIPHERS = {
     'none': 'cipher none',
-    'bf128': 'cipher BF-CBC',
-    'bf256': 'cipher BF-CBC\nkeysize 256',
-    'aes128': 'cipher AES-128-CBC',
-    'aes192': 'cipher AES-192-CBC',
-    'aes256': 'cipher AES-256-CBC',
+    'bf128': 'cipher AES-128-CBC\ndata-ciphers AES-128-GCM:AES-128-CBC',
+    'bf256': 'cipher AES-256-CBC\ndata-ciphers AES-256-GCM:AES-256-CBC',
+    'aes128': 'cipher AES-128-CBC\ndata-ciphers AES-128-GCM:AES-128-CBC',
+    'aes192': 'cipher AES-256-CBC\ndata-ciphers AES-256-GCM:AES-256-CBC',
+    'aes256': 'cipher AES-256-CBC\ndata-ciphers AES-256-GCM:AES-256-CBC',
+    'chacha20poly1205': 'cipher CHACHA20-POLY1305\ndata-ciphers CHACHA20-POLY1305',
+}
+CIPHERS_DCO = {
+    'none': 'cipher none',
+    'bf128': 'cipher AES-128-GCM\ndata-ciphers AES-128-GCM',
+    'bf256': 'cipher AES-256-GCM\ndata-ciphers AES-256-GCM',
+    'aes128': 'cipher AES-128-GCM\ndata-ciphers AES-128-GCM',
+    'aes192': 'cipher AES-256-GCM\ndata-ciphers AES-256-GCM',
+    'aes256': 'cipher AES-256-GCM\ndata-ciphers AES-256-GCM',
+    'chacha20poly1205': 'cipher CHACHA20-POLY1305\ndata-ciphers CHACHA20-POLY1305',
 }
 
 SERVER_CIPHERS_OLD = {
     'none': 'cipher none',
-    'bf128': 'cipher BF-CBC',
-    'bf256': 'cipher BF-CBC\nkeysize 256',
+    'bf128': 'cipher AES-128-CBC',
+    'bf256': 'cipher AES-256-CBC',
     'aes128': 'cipher AES-128-CBC',
-    'aes192': 'cipher AES-192-CBC',
+    'aes192': 'cipher AES-256-CBC',
     'aes256': 'cipher AES-256-CBC',
+    'chacha20poly1205': 'cipher CHACHA20-POLY1305',
 }
 SERVER_CIPHERS = {
-    'none': 'cipher none',
-    'bf128': 'cipher BF-CBC',
-    'bf256': 'cipher BF-CBC\nkeysize 256',
+    'none': 'cipher none\nncp-disable',
+    'bf128': 'cipher AES-128-CBC\nncp-ciphers AES-128-GCM:AES-128-CBC',
+    'bf256': 'cipher AES-256-CBC\nncp-ciphers AES-256-GCM:AES-256-CBC',
     'aes128': 'cipher AES-128-CBC\nncp-ciphers AES-128-GCM:AES-128-CBC',
-    'aes192': 'cipher AES-192-CBC\nncp-ciphers AES-192-GCM:AES-192-CBC',
+    'aes192': 'cipher AES-256-CBC\nncp-ciphers AES-256-GCM:AES-256-CBC',
     'aes256': 'cipher AES-256-CBC\nncp-ciphers AES-256-GCM:AES-256-CBC',
+    'chacha20poly1205': 'cipher CHACHA20-POLY1305\nncp-ciphers CHACHA20-POLY1305',
+}
+SERVER_CIPHERS_DCO = {
+    'none': 'cipher none\nncp-disable',
+    'bf128': 'cipher AES-128-GCM',
+    'bf256': 'cipher AES-256-GCM',
+    'aes128': 'cipher AES-128-GCM',
+    'aes192': 'cipher AES-256-GCM',
+    'aes256': 'cipher AES-256-GCM',
+    'chacha20poly1205': 'cipher CHACHA20-POLY1305',
 }
 
 HASHES = {
@@ -1059,16 +1092,11 @@ HASHES = {
 
 ONC_CIPHERS = {
     'none': 'none',
-    'bf128': 'BF-CBC',
-    'bf256': 'BF-CBC',
+    'bf128': 'AES-128-CBC',
+    'bf256': 'AES-256-CBC',
     'aes128': 'AES-128-CBC',
-    'aes192': 'AES-192-CBC',
+    'aes192': 'AES-256-CBC',
     'aes256': 'AES-256-CBC',
-}
-
-JUMBO_FRAMES = {
-    False: '',
-    True: 'tun-mtu 9000\nfragment 0\nmssfix 0\n',
 }
 
 OVPN_INLINE_SERVER_CONF_OLD = """\
@@ -1080,11 +1108,10 @@ management %s unix
 management-client-auth
 auth-user-pass-optional
 topology subnet
+tls-version-min 1.2
 max-clients %s
 ping %s
 ping-restart %s
-push "ping %s"
-push "ping-restart %s"
 persist-tun
 %s
 auth %s
@@ -1094,13 +1121,14 @@ sndbuf 393216
 rcvbuf 393216
 reneg-sec 2592000
 hash-size 1024 1024
-max-routes-per-client 1000
+txqueuelen 1000
 verb %s
 mute %s
 """
 
 OVPN_INLINE_SERVER_CONF = """\
 ignore-unknown-option ncp-ciphers
+ignore-unknown-option ncp-disable
 port %s
 proto %s
 dev %s
@@ -1109,11 +1137,10 @@ management %s unix
 management-client-auth
 auth-user-pass-optional
 topology subnet
+tls-version-min 1.2
 max-clients %s
 ping %s
 ping-restart %s
-push "ping %s"
-push "ping-restart %s"
 persist-tun
 %s
 auth %s
@@ -1123,13 +1150,14 @@ sndbuf 393216
 rcvbuf 393216
 reneg-sec 2592000
 hash-size 1024 1024
-max-routes-per-client 1000
+txqueuelen 1000
 verb %s
 mute %s
 """
 
 OVPN_INLINE_CLIENT_CONF = """\
 %s
+ignore-unknown-option data-ciphers
 setenv UV_ID %s
 setenv UV_NAME %s
 client
@@ -1146,11 +1174,10 @@ push-peer-info
 ping %s
 ping-restart %s
 hand-window 70
-server-poll-timeout 4
+server-poll-timeout %s
 reneg-sec 2592000
 sndbuf 393216
 rcvbuf 393216
-max-routes 1000
 remote-cert-tls server
 """
 
@@ -1230,9 +1257,10 @@ OVPN_ONC_CLIENT_CERT = """\
     }"""
 
 OVPN_INLINE_LINK_CONF = """\
-client
+ignore-unknown-option data-ciphers
 setenv UV_ID %s
 setenv UV_NAME %s
+client
 dev %s
 dev-type %s
 %s
@@ -1246,11 +1274,10 @@ push-peer-info
 ping %s
 ping-restart %s
 hand-window 70
-server-poll-timeout 4
+server-poll-timeout %s
 reneg-sec 2592000
 sndbuf 393216
 rcvbuf 393216
-max-routes 1000
 remote-cert-tls server
 """
 
@@ -1339,3 +1366,19 @@ URI Profile Link: <a href="{uri_link}">{uri_link}</a></p>
   </div>
   <meta itemprop="description" content="View Pritunl profile and configuration information"></meta>
 </div>"""
+
+ROBOTS = """User-agent: *
+Disallow: /
+"""
+
+WEB_SYSTEMD_ENV_TEMPLATE = """REVERSE_PROXY_HEADER=%s
+REVERSE_PROXY_PROTO_HEADER=%s
+REDIRECT_SERVER=%s
+BIND_HOST=%s
+BIND_PORT=%s
+INTERNAL_ADDRESS=%s
+SSL_CERT=%s
+SSL_KEY=%s
+WEB_STRICT=%s
+WEB_SECRET=%s
+"""

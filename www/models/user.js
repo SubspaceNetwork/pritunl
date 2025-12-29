@@ -12,6 +12,7 @@ define([
       'name': null,
       'email': null,
       'groups': null,
+      'last_active': null,
       'gravatar': null,
       'audit': null,
       'type': null,
@@ -30,7 +31,8 @@ define([
       'dns_servers': null,
       'dns_suffix': null,
       'port_forwarding': null,
-      'pin': null
+      'pin': null,
+      'devices': null
     },
     url: function() {
       var url = '/user/' + this.get('organization');

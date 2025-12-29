@@ -4,7 +4,7 @@
 </div>
 <div class="form-group email">
   <label>Email (optional)</label>
-  <input type="email" class="form-control" placeholder="Enter email address" data-toggle="tooltip" title="User email address" value="<%- email ? email : '' %>">
+  <input type="email" class="form-control" placeholder="Enter email address" data-toggle="tooltip" title="User email address" value="<%- email ? email : '' %>" autocomplete="off">
 </div>
 <div class="form-group groups">
   <label>Groups</label>
@@ -15,12 +15,12 @@
 <div class="form-group pin">
   <label>Pin</label>
   <input type="password" class="form-control" placeholder="Enter user pin"
-    data-toggle="tooltip" title="User pin, required when user connects to vpn. When using with two-factor authentication the pin and two-factor authentication code should both be placed in the password field."
+    data-toggle="tooltip" title="User pin, required when user connects to vpn. When using with two-factor authentication the pin and two-factor authentication code should both be placed in the password field." autocomplete="new-password"
     value="<%- pin ? '******' : '' %>">
 </div>
-<div class="form-group yubikey-id" <%= bypass_secondary !== true && auth_type === 'yubico' ? '' : 'style="display: none"' %>>
+<div class="form-group yubikey-id">
   <label>YubiKey ID</label>
-  <input type="text" class="form-control" maxlength="12" placeholder="Insert YubiKey" data-toggle="tooltip" title="Insert and touch YubiKey to get ID. Requires Yubico API credentials in settings." value="<%- yubico_id %>">
+  <input type="text" class="form-control" maxlength="12" placeholder="Insert YubiKey" data-toggle="tooltip" title="Insert and touch YubiKey to get ID. Requires Yubico API credentials in settings." value="<%- yubico_id %>" autocomplete="off">
 </div>
 <div class="form-group port-forwarding">
   <label>Port Forwarding</label>
@@ -45,16 +45,18 @@
 <div class="advanced">
   <div class="form-group auth-type">
     <label>Type</label>
-    <select class="form-control" data-toggle="tooltip" title="User authentication type. This will determine how the user authenticates. This should be set automatically when the user authenticates with single sign-on.">
+    <select class="form-control" data-toggle="tooltip" title="User authentication type. This will determine how the user authenticates. This should be set automatically when the user authenticates with single sign-on. Single sign-on will override any changes to this value if the user authenticates with single sign-on from the web console.">
       <option value="local" <%= auth_type === 'local' ? 'selected' : '' %>>Local</option>
       <option value="duo" <%= auth_type === 'duo' ? 'selected' : '' %>>Duo</option>
-      <option value="yubico" <%= auth_type === 'yubico' ? 'selected' : '' %>>Yubico</option>
       <option value="azure" <%= auth_type === 'azure' ? 'selected' : '' %>>Azure</option>
       <option value="azure_duo" <%= auth_type === 'azure_duo' ? 'selected' : '' %>>Azure + Duo</option>
       <option value="azure_yubico" <%= auth_type === 'azure_yubico' ? 'selected' : '' %>>Azure + Yubico</option>
       <option value="google" <%= auth_type === 'google' ? 'selected' : '' %>>Google</option>
       <option value="google_duo" <%= auth_type === 'google_duo' ? 'selected' : '' %>>Google + Duo</option>
       <option value="google_yubico" <%= auth_type === 'google_yubico' ? 'selected' : '' %>>Google + Yubico</option>
+      <option value="authzero" <%= auth_type === 'authzero' ? 'selected' : '' %>>Auth0</option>
+      <option value="authzero_duo" <%= auth_type === 'authzero_duo' ? 'selected' : '' %>>Auth0 + Duo</option>
+      <option value="authzero_yubico" <%= auth_type === 'authzero_yubico' ? 'selected' : '' %>>Auth0 + Yubico</option>
       <option value="slack" <%= auth_type === 'slack' ? 'selected' : '' %>>Slack</option>
       <option value="slack_duo" <%= auth_type === 'slack_duo' ? 'selected' : '' %>>Slack + Duo</option>
       <option value="slack_yubico" <%= auth_type === 'slack_yubico' ? 'selected' : '' %>>Slack + Yubico</option>
@@ -63,14 +65,24 @@
       <option value="saml_yubico" <%= auth_type === 'saml_yubico' ? 'selected' : '' %>>SAML + Yubico</option>
       <option value="saml_okta" <%= auth_type === 'saml_okta' ? 'selected' : '' %>>Okta</option>
       <option value="saml_okta_duo" <%= auth_type === 'saml_okta_duo' ? 'selected' : '' %>>Okta + Duo</option>
-      <option value="saml_okta_yubico" <%= auth_type === 'saml_okta_yubico' ? 'selected' : '' %>>Okta Yubico</option>
+      <option value="saml_okta_yubico" <%= auth_type === 'saml_okta_yubico' ? 'selected' : '' %>>Okta + Yubico</option>
       <option value="saml_onelogin" <%= auth_type === 'saml_onelogin' ? 'selected' : '' %>>OneLogin</option>
-      <option value="saml_onelogin_duo" <%= auth_type === 'saml_onelogin_duo' ? 'selected' : '' %>>OneLogin Duo</option>
-      <option value="saml_onelogin_yubico" <%= auth_type === 'saml_onelogin_yubico' ? 'selected' : '' %>>OneLogin Yubico</option>
+      <option value="saml_onelogin_duo" <%= auth_type === 'saml_onelogin_duo' ? 'selected' : '' %>>OneLogin + Duo</option>
+      <option value="saml_onelogin_yubico" <%= auth_type === 'saml_onelogin_yubico' ? 'selected' : '' %>>OneLogin + Yubico</option>
+      <option value="saml_jumpcloud" <%= auth_type === 'saml_jumpcloud' ? 'selected' : '' %>>JumpCloud</option>
+      <option value="saml_jumpcloud_duo" <%= auth_type === 'saml_jumpcloud_duo' ? 'selected' : '' %>>JumpCloud + Duo</option>
+      <option value="saml_jumpcloud_yubico" <%= auth_type === 'saml_jumpcloud_yubico' ? 'selected' : '' %>>JumpCloud + Yubico</option>
       <option value="radius" <%= auth_type === 'radius' ? 'selected' : '' %>>Radius</option>
       <option value="radius_duo" <%= auth_type === 'radius_duo' ? 'selected' : '' %>>Radius + Duo</option>
       <option value="plugin" <%= auth_type === 'plugin' ? 'selected' : '' %>>Plugin</option>
     </select>
+  </div>
+  <div class="form-group mac-addresses">
+    <label>Allowed MAC Addresses</label>
+    <input type="text" class="form-control"
+           placeholder="Enter MAC address" data-toggle="tooltip"
+           title="Comma separated list of MAC addresses client is allowed to connect from. The validity of the MAC address provided by the VPN client cannot be verified."
+           value="<%- mac_addresses ? mac_addresses.join(', ') : '' %>">
   </div>
   <div class="form-group dns-servers">
     <label>DNS Forwarding Server</label>

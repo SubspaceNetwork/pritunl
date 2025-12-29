@@ -1,5 +1,6 @@
 from pritunl.exceptions import *
 from pritunl.helpers import *
+from pritunl import database
 
 import os
 import copy
@@ -10,7 +11,7 @@ class MongoObject(object):
     fields_required = {}
 
     def __new__(cls, id=None, doc=None, spec=None, fields=None,
-            upsert=False,**kwargs):
+            upsert=False, **kwargs):
         from pritunl import utils
         fields = fields or cls.fields
 
@@ -29,10 +30,10 @@ class MongoObject(object):
                     return None
                 mongo_object.exists = False
                 if not id:
-                    mongo_object.id = utils.ObjectId()
+                    mongo_object.id = database.ObjectId()
         else:
             mongo_object.exists = False
-            mongo_object.id = utils.ObjectId()
+            mongo_object.id = database.ObjectId()
         return mongo_object
 
     def __setattr__(self, name, value):
@@ -94,7 +95,7 @@ class MongoObject(object):
         doc = {}
 
         if fields is not None:
-            if isinstance(fields, basestring):
+            if isinstance(fields, str):
                 fields = (fields,)
         elif self.exists:
             fields = self.fields
@@ -122,16 +123,12 @@ class MongoObject(object):
     def unset(self, field):
         self.unseted.add(field)
 
-    def commit(self, fields=None, transaction=None, spec=None):
+    def commit(self, fields=None, spec=None):
         doc = self.get_commit_doc(fields=fields)
         unset = {x: '' for x in self.unseted}
         response = False
 
-        if transaction:
-            collection = transaction.collection(
-                self.collection.name_str)
-        else:
-            collection = self.collection
+        collection = self.collection
 
         if doc or unset:
             update_doc = {}
@@ -149,13 +146,10 @@ class MongoObject(object):
             if unset:
                 update_doc['$unset'] = unset
 
-            response = collection.update(
-                spec, update_doc, upsert=True)
+            response = collection.update_one(
+                spec, update_doc, upsert=not fields)
 
-            if transaction:
-                response = True
-            else:
-                response = response['updatedExisting']
+            response = bool(response.modified_count)
 
         self.exists = True
         self.changed = set()
@@ -164,7 +158,7 @@ class MongoObject(object):
         return response
 
     def remove(self):
-        self.collection.remove(self.id)
+        self.collection.delete_one({'_id': self.id})
 
     def read_file(self, field, path, rstrip=True):
         with open(path, 'r') as field_file:

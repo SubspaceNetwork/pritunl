@@ -10,10 +10,14 @@ import threading
 import math
 
 def new_pooled():
-    thread = threading.Thread(target=new_org, kwargs={
-        'type': ORG_POOL,
-        'block': False,
-    })
+    thread = threading.Thread(
+        name="NewOrg",
+        target=new_org,
+        kwargs={
+            'type': ORG_POOL,
+            'block': False,
+        },
+    )
     thread.daemon = True
     thread.start()
 
@@ -27,27 +31,17 @@ def reserve_pooled(name=None, auth_api=None, type=ORG_DEFAULT):
     if type is not None:
         doc['type'] = type
 
-    doc = Organization.collection.find_and_modify({
+    doc = Organization.collection.find_one_and_update({
         'type': ORG_POOL,
     }, {
         '$set': doc,
-    }, new=True)
+    }, return_document=True)
 
     if doc:
         return Organization(doc=doc)
 
 def new_org(type=ORG_DEFAULT, block=True, **kwargs):
     if type == ORG_DEFAULT:
-        org = reserve_pooled(type=type, **kwargs)
-
-        if not org:
-            org = queue.reserve('queued_org', block=block, type=type,
-                **kwargs)
-
-        if org:
-            new_pooled()
-            return org
-
         org = Organization(type=type, **kwargs)
         org.initialize()
         org.commit()
@@ -109,11 +103,9 @@ def iter_orgs(spec=None, type=ORG_DEFAULT, fields=None, page=None):
 def get_org_page_total():
     org_collection = mongo.get_collection('organizations')
 
-    count = org_collection.find({
+    count = org_collection.count_documents({
         'type': ORG_DEFAULT,
-    }, {
-        '_id': True,
-    }).count()
+    })
 
     return int(math.floor(max(0, float(count - 1)) /
         settings.app.org_page_count))
@@ -123,12 +115,10 @@ def get_user_count(org_ids, type=CERT_CLIENT):
     org_user_count = {}
 
     for org_id in org_ids:
-        org_user_count[org_id] = user_collection.find({
+        org_user_count[org_id] = user_collection.count_documents({
             'type': type,
             'org_id': org_id,
-        }, {
-            '_id': True,
-        }).count()
+        })
 
     return org_user_count
 
@@ -138,6 +128,4 @@ def get_user_count_multi(org_ids=None, type=CERT_CLIENT):
     }
     if org_ids is not None:
         spec['org_id'] = {'$in': org_ids}
-    return user.User.collection.find(spec, {
-        '_id': True,
-    }).count()
+    return user.User.collection.count_documents(spec)

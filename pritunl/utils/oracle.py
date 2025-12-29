@@ -1,6 +1,7 @@
 from pritunl.exceptions import *
 from pritunl.constants import *
 from pritunl import settings
+from pritunl import utils
 
 import oci
 import requests
@@ -18,7 +19,7 @@ def oracle_get_metadata():
     public_key = load_pem_public_key(
         public_key_pem.encode(), default_backend())
 
-    fingerprint = hashlib.md5()
+    fingerprint = utils.unsafe_md5()
 
     fingerprint.update(public_key.public_bytes(
         encoding=serialization.Encoding.DER,
@@ -28,7 +29,7 @@ def oracle_get_metadata():
     fingerprint = fingerprint.hexdigest()
     fingerprint = ':'.join(fingerprint[i:i + 2] for i in range(0, 32, 2))
 
-    output = subprocess.check_output(['oci-metadata', '--json'])
+    output = subprocess.check_output(['oci-metadata', '--json']).decode()
     metadata = json.loads(output)
 
     return {
@@ -36,7 +37,7 @@ def oracle_get_metadata():
         'private_key': private_key_pem,
         'fingerprint': fingerprint,
         'region_name': metadata['instance']['canonicalRegionName'],
-        'tenancy_ocid': metadata['instance']['compartmentId'],
+        'tenancy_ocid': metadata['instance']['tenantId'],
         'compartment_ocid': metadata['instance']['compartmentId'],
         'vnic_ocid': metadata['vnics'][0]['vnicId'],
     }

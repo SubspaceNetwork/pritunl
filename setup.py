@@ -6,7 +6,7 @@ import shlex
 import shutil
 import fileinput
 
-VERSION = '1.29.2276.91'
+VERSION = '1.32.4469.94'
 PATCH_DIR = 'build'
 install_systemd = True
 install_upstart = False
@@ -26,8 +26,8 @@ for arg in copy.copy(sys.argv):
         sys.argv.remove('--sysvinit')
         install_sysvinit = True
 
-if not os.path.exists('build'):
-    os.mkdir('build')
+if not os.path.exists(PATCH_DIR):
+    os.mkdir(PATCH_DIR)
 
 main_css_path = os.path.join('www/vendor/dist/css',
     os.listdir('www/vendor/dist/css')[0])
@@ -46,6 +46,7 @@ data_files = [
         'www/key_view_dark.html',
         'www/duo.html',
         'www/yubico.html',
+        'www/success.html',
         'www/login.html',
         'www/upgrade.html',
         'www/vendor/dist/index.html',
@@ -94,11 +95,15 @@ if install_systemd:
         ['%s/pritunl.service' % PATCH_DIR]))
     shutil.copy('data/systemd/pritunl.service',
         '%s/pritunl.service' % PATCH_DIR)
+    data_files.append(('/etc/systemd/system',
+        ['%s/pritunl-web.service' % PATCH_DIR]))
+    shutil.copy('data/systemd/pritunl-web.service',
+        '%s/pritunl-web.service' % PATCH_DIR)
 
 for file_name in patch_files:
     for line in fileinput.input(file_name, inplace=True):
         line = line.replace('%PREFIX%', prefix)
-        print line.rstrip('\n')
+        print(line.rstrip('\n'))
 
 packages = ['pritunl']
 
@@ -110,7 +115,7 @@ setup(
     name='pritunl',
     version=VERSION,
     description='Enterprise VPN server',
-    long_description=open('README.md').read(),
+    long_description=open('README.md', 'rb').read().decode(),
     author='Pritunl',
     author_email='contact@pritunl.com',
     url='https://github.com/pritunl/pritunl',
@@ -121,7 +126,7 @@ setup(
         'virtual private network, virtual networks, openvpn client, ' +
         'openvpn server, vpn tutorial',
     packages=packages,
-    license=open('LICENSE').read(),
+    license=open('LICENSE', 'rb').read().decode(),
     zip_safe=False,
     data_files=data_files,
     entry_points={
@@ -137,7 +142,7 @@ setup(
         'License :: Other/Proprietary License',
         'Natural Language :: English',
         'Operating System :: POSIX :: Linux',
-        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3.6',
         'Topic :: System :: Networking',
     ],
 )

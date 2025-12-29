@@ -6,6 +6,7 @@ import collections
 
 class TaskLink(task.Task):
     type = 'link'
+    delay = 10
 
     def task(self):
         if settings.app.demo_mode:
@@ -13,7 +14,6 @@ class TaskLink(task.Task):
 
         hosts = []
         location_available_hosts = collections.defaultdict(list)
-        best_hosts = {}
         for hst in link.iter_hosts():
             hosts.append(hst)
 
@@ -22,25 +22,7 @@ class TaskLink(task.Task):
 
             location_available_hosts[hst.location_id].append(hst)
 
-            cur_hst = best_hosts.get(hst.location_id)
-            if not cur_hst:
-                best_hosts[hst.location_id] = hst
-                continue
-
-            if hst.priority > cur_hst.priority:
-                best_hosts[hst.location_id] = hst
-                continue
-
-            if hst.priority == cur_hst.priority and \
-                    hst.active and not cur_hst.active:
-                best_hosts[hst.location_id] = hst
-                continue
-
-        for hst in best_hosts.values():
-            if not hst.active:
-                hst.set_active()
-
         for hst in hosts:
             hst.update_available(location_available_hosts[hst.location_id])
 
-task.add_task(TaskLink, seconds=xrange(0, 60, 3))
+task.add_task(TaskLink, seconds=range(0, 60, 3))

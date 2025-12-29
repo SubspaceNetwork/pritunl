@@ -7,28 +7,35 @@ import base64
 import email
 import hmac
 import hashlib
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import requests
 
 def _sign(method, path, params):
-    now = email.Utils.formatdate()
+    now = email.utils.formatdate()
     canon = [now, method.upper(), settings.app.sso_duo_host.lower(), path]
     args = []
     for key in sorted(params.keys()):
         val = params[key]
-        if isinstance(val, unicode):
+        if isinstance(val, str):
             val = val.encode("utf-8")
-        args.append(
-            '%s=%s' % (urllib.quote(key, '~'), urllib.quote(val, '~')))
+        args.append('%s=%s' % (
+            urllib.parse.quote(key, '~'),
+            urllib.parse.quote(val, '~'),
+        ))
     canon.append('&'.join(args))
     canon = '\n'.join(canon)
 
-    sig = hmac.new(settings.app.sso_duo_secret.encode(), canon, hashlib.sha1)
-    auth = '%s:%s' % (settings.app.sso_duo_token.encode(), sig.hexdigest())
+    sig = hmac.new(
+        settings.app.sso_duo_secret.encode(),
+        canon.encode(),
+        hashlib.sha1,
+    )
+    auth = '%s:%s' % (settings.app.sso_duo_token, sig.hexdigest())
 
     return {
         'Date': now,
-        'Authorization': 'Basic %s' % base64.b64encode(auth),
+        'Authorization': 'Basic %s' % base64.b64encode(
+            auth.encode()).decode(),
     }
 
 class Duo(object):
@@ -71,7 +78,7 @@ class Duo(object):
                 params['type'] = self.auth_type
 
             if self.info:
-                params['pushinfo'] = urllib.urlencode(self.info)
+                params['pushinfo'] = urllib.parse.urlencode(self.info)
 
         if factor == 'passcode':
             params['passcode'] = self.passcode
@@ -83,7 +90,7 @@ class Duo(object):
             response = requests.post(url,
                 headers=headers,
                 params=params,
-                timeout=30,
+                timeout=settings.app.sso_duo_timeout,
             )
         except:
             if factor == 'push' and self.factor == 'push_phone':
@@ -112,12 +119,12 @@ class Duo(object):
             if factor == 'push' and self.factor == 'push_phone':
                 self._auth('phone')
             else:
-                logger.error('Invalid Duo username',
+                logger.error('Invalid Duo username or device',
                     'sso',
                     username=self.username,
-                    data=resp_data,
+                    data=data,
                 )
-                raise InvalidUser('Invalid username')
+                raise InvalidUser('Invalid username or device')
         else:
             logger.error('Duo authentication failure', 'sso',
                 data=data,

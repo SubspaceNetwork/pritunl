@@ -10,6 +10,9 @@ import pymongo
 import pymongo.helpers
 import time
 import collections
+import base64
+import nacl.secret
+import nacl.utils
 
 def _get_read_pref(name):
     return {
@@ -54,7 +57,7 @@ def drop_index(coll, index, **kwargs):
         pass
 
 def clean_indexes():
-    for coll_name in mongo.collection_types.keys():
+    for coll_name in list(mongo.collection_types.keys()):
         coll = mongo.get_collection(coll_name)
         indexes = coll_indexes[coll_name]
 
@@ -72,7 +75,7 @@ def upsert_indexes():
     prefix = settings.conf.mongodb_collection_prefix or ''
     mongo.prefix = prefix
 
-    cur_collections = mongo.database.collection_names()
+    cur_collections = mongo.database.list_collection_names()
     if prefix + 'logs' not in cur_collections:
         log_limit = settings.app.log_limit
         mongo.database.create_collection(prefix + 'logs', capped=True,
@@ -83,11 +86,15 @@ def upsert_indexes():
         mongo.database.create_collection(prefix + 'log_entries', capped=True,
             size=log_entry_limit * 512, max=log_entry_limit)
 
-    cur_collections = mongo.secondary_database.collection_names()
+    cur_collections = mongo.secondary_database.list_collection_names()
     if prefix + 'messages' not in cur_collections:
         mongo.secondary_database.create_collection(
             prefix + 'messages', capped=True,
-            size=5000192, max=1000)
+            size=20971520, max=5000)
+        mongo.get_collection('messages').insert_one({
+            'message': None,
+            'timestamp': utils.now(),
+        })
 
     upsert_index('logs', 'timestamp', background=True)
     upsert_index('transaction', 'lock_id',
@@ -128,6 +135,14 @@ def upsert_indexes():
     upsert_index('users', [
         ('name', pymongo.ASCENDING),
         ('auth_type', pymongo.ASCENDING),
+    ], background=True)
+    upsert_index('users', [
+        ('last_active', pymongo.ASCENDING),
+        ('name', pymongo.ASCENDING),
+    ], background=True)
+    upsert_index('users', [
+        ('devices.registered', pymongo.ASCENDING),
+        ('name', pymongo.ASCENDING),
     ], background=True)
     upsert_index('users_audit', [
         ('org_id', pymongo.ASCENDING),
@@ -259,12 +274,10 @@ def upsert_indexes():
     else:
         upsert_index('clients', 'timestamp',
             background=True, expireAfterSeconds=settings.vpn.client_ttl)
-        upsert_index('clients_pool', 'timestamp',
-            background=True, expireAfterSeconds=settings.vpn.client_ttl)
     upsert_index('users_key_link', 'timestamp',
         background=True, expireAfterSeconds=settings.app.key_link_timeout)
     upsert_index('acme_challenges', 'timestamp',
-        background=True, expireAfterSeconds=180)
+        background=True, expireAfterSeconds=3600)
     upsert_index('auth_sessions', 'timestamp',
         background=True, expireAfterSeconds=settings.app.session_timeout)
     upsert_index('auth_nonces', 'timestamp',
@@ -277,13 +290,19 @@ def upsert_indexes():
         background=True, expireAfterSeconds=604800)
     upsert_index('auth_limiter', 'timestamp',
         background=True, expireAfterSeconds=settings.app.auth_limiter_ttl)
+    upsert_index('wg_keys', 'timestamp',
+        background=True, expireAfterSeconds=settings.app.wg_public_key_ttl)
     upsert_index('otp', 'timestamp', background=True,
         expireAfterSeconds=120)
     upsert_index('otp_cache', 'timestamp',
         background=True, expireAfterSeconds=settings.app.sso_cache_timeout)
     upsert_index('yubikey', 'timestamp',
         background=True, expireAfterSeconds=86400)
+    upsert_index('key_tokens', 'timestamp',
+        background=True, expireAfterSeconds=600)
     upsert_index('sso_tokens', 'timestamp',
+        background=True, expireAfterSeconds=600)
+    upsert_index('server_sso_tokens', 'timestamp',
         background=True, expireAfterSeconds=600)
     upsert_index('sso_push_cache', 'timestamp',
         background=True, expireAfterSeconds=settings.app.sso_cache_timeout)
@@ -381,8 +400,8 @@ def setup_mongo():
     mongo.database = database
     mongo.secondary_database = secondary_database
 
-    cur_collections = database.collection_names()
-    cur_sec_collections = secondary_database.collection_names()
+    cur_collections = database.list_collection_names()
+    cur_sec_collections = secondary_database.list_collection_names()
     if 'authorities' in cur_collections or \
             'authorities' in cur_sec_collections:
         raise TypeError('Cannot connect to a Pritunl Zero database')
@@ -418,9 +437,12 @@ def setup_mongo():
         'auth_csrf_tokens': 2,
         'auth_nonces': 2,
         'auth_limiter': 2,
+        'wg_keys': 2,
         'otp': 2,
         'otp_cache': 2,
         'yubikey': 2,
+        'key_tokens': 2,
+        'server_sso_tokens': 2,
         'sso_tokens': 2,
         'sso_push_cache': 2,
         'sso_client_cache': 2,
@@ -430,16 +452,20 @@ def setup_mongo():
         'log_entries': 1,
     }
 
-    cur_collections = mongo.secondary_database.collection_names()
+    cur_collections = mongo.secondary_database.list_collection_names()
     if prefix + 'messages' not in cur_collections:
         mongo.secondary_database.create_collection(
             prefix + 'messages', capped=True,
-            size=5000192, max=1000)
+            size=20971520, max=5000)
     elif not mongo.get_collection('messages').options().get('capped'):
         mongo.get_collection('messages').drop()
         mongo.secondary_database.create_collection(
             prefix + 'messages', capped=True,
-            size=5000192, max=1000)
+            size=20971520, max=5000)
+        mongo.get_collection('messages').insert_one({
+            'message': None,
+            'timestamp': utils.now(),
+        })
 
     settings.local.mongo_time = None
 
@@ -464,6 +490,7 @@ def setup_mongo():
 
     secret_key = settings.app.cookie_secret
     secret_key2 = settings.app.cookie_secret2
+    cookie_web_secret = settings.app.cookie_web_secret
     settings_commit = False
 
     if not secret_key:
@@ -475,7 +502,14 @@ def setup_mongo():
         settings_commit = True
         settings.app.cookie_secret2 = utils.rand_str(64)
 
+    if not cookie_web_secret:
+        settings_commit = True
+        web_key = nacl.utils.random(nacl.secret.SecretBox.KEY_SIZE)
+        cookie_web_secret = base64.b64encode(bytes(web_key)).decode()
+        settings.app.cookie_web_secret = cookie_web_secret
+
     if settings_commit:
         settings.commit()
 
     app.app.secret_key = secret_key.encode()
+    settings.local.web_secret = base64.b64decode(cookie_web_secret)

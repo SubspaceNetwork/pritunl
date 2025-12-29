@@ -20,10 +20,22 @@ def _network_invalid():
         'error_msg': NETWORK_INVALID_MSG,
     }, 400)
 
+def _network_wg_invalid():
+    return utils.jsonify({
+        'error': NETWORK_WG_INVALID,
+        'error_msg': NETWORK_WG_INVALID_MSG,
+    }, 400)
+
 def _port_invalid():
     return utils.jsonify({
         'error': PORT_INVALID,
         'error_msg': PORT_INVALID_MSG,
+    }, 400)
+
+def _port_wg_invalid():
+    return utils.jsonify({
+        'error': PORT_WG_INVALID,
+        'error_msg': PORT_WG_INVALID_MSG,
     }, 400)
 
 def _dh_param_bits_invalid():
@@ -45,13 +57,13 @@ def _dns_server_invalid():
     }, 400)
 
 def _check_network_overlap(test_network, networks):
-    test_net = ipaddress.IPNetwork(test_network)
-    test_start = test_net.network
-    test_end = test_net.broadcast
+    test_net = ipaddress.ip_network(test_network)
+    test_start = test_net.network_address
+    test_end = test_net.broadcast_address
 
     for network in networks:
-        net_start = network.network
-        net_end = network.broadcast
+        net_start = network.network_address
+        net_end = network.broadcast_address
 
         if test_start >= net_start and test_start <= net_end:
             return True
@@ -65,14 +77,14 @@ def _check_network_overlap(test_network, networks):
     return False
 
 def _check_network_private(test_network):
-    test_net = ipaddress.IPNetwork(test_network)
-    test_start = test_net.network
-    test_end = test_net.broadcast
+    test_net = ipaddress.ip_network(test_network)
+    test_start = test_net.network_address
+    test_end = test_net.broadcast_address
 
     for network in settings.vpn.safe_priv_subnets:
-        network = ipaddress.IPNetwork(network)
-        net_start = network.network
-        net_end = network.broadcast
+        network = ipaddress.ip_network(network)
+        net_start = network.network_address
+        net_end = network.broadcast_address
 
         if test_start >= net_start and test_end <= net_end:
             return True
@@ -80,13 +92,13 @@ def _check_network_private(test_network):
     return False
 
 def _check_network_range(test_network, start_addr, end_addr):
-    test_net = ipaddress.IPNetwork(test_network)
-    start_addr = ipaddress.IPAddress(start_addr)
-    end_addr = ipaddress.IPAddress(end_addr)
+    test_net = ipaddress.ip_network(test_network)
+    start_addr = ipaddress.ip_address(start_addr)
+    end_addr = ipaddress.ip_address(end_addr)
 
     return all((
-        start_addr != test_net.network,
-        end_addr != test_net.broadcast,
+        start_addr != test_net.network_address,
+        end_addr != test_net.broadcast_address,
         start_addr < end_addr,
         start_addr in test_net,
         end_addr in test_net,
@@ -154,13 +166,34 @@ def server_put_post(server_id=None):
     if 'network' in flask.request.json and \
             flask.request.json['network'] != '':
         network_def = True
-        network = flask.request.json['network']
+        network = flask.request.json['network'].strip()
 
         try:
             if not _check_network_private(network):
                 return _network_invalid()
         except (ipaddress.AddressValueError, ValueError):
             return _network_invalid()
+
+    wg = None
+    wg_def = False
+    if 'wg' in flask.request.json:
+        wg_def = True
+        wg = True if flask.request.json['wg'] else False
+
+    network_wg = None
+    network_wg_def = False
+    if wg and 'network_wg' in flask.request.json and \
+            flask.request.json['network_wg'] != '':
+        network_wg_def = True
+        network_wg = flask.request.json['network_wg'].strip()
+
+        try:
+            if not _check_network_private(network_wg):
+                return _network_wg_invalid()
+        except (ipaddress.AddressValueError, ValueError):
+            return _network_wg_invalid()
+    elif not wg:
+        network_wg_def = True
 
     network_mode = None
     network_mode_def = False
@@ -179,6 +212,61 @@ def server_put_post(server_id=None):
     if 'network_end' in flask.request.json:
         network_end_def = True
         network_end = flask.request.json['network_end']
+
+    hide_ovpn = None
+    hide_ovpn_def = False
+    if 'hide_ovpn' in flask.request.json:
+        hide_ovpn_def = True
+        hide_ovpn = True if flask.request.json['hide_ovpn'] \
+            else False
+
+    ovpn_dco = None
+    ovpn_dco_def = False
+    if 'ovpn_dco' in flask.request.json:
+        ovpn_dco_def = True
+        ovpn_dco = True if flask.request.json['ovpn_dco'] else False
+
+    dynamic_firewall = None
+    dynamic_firewall_def = False
+    if 'dynamic_firewall' in flask.request.json:
+        dynamic_firewall_def = True
+        dynamic_firewall = True if flask.request.json['dynamic_firewall'] \
+            else False
+
+    bypass_sso_auth = None
+    bypass_sso_auth_def = False
+    if 'bypass_sso_auth' in flask.request.json:
+        bypass_sso_auth_def = True
+        bypass_sso_auth = True if flask.request.json['bypass_sso_auth'] \
+            else False
+
+    geo_sort = None
+    geo_sort_def = False
+    if 'geo_sort' in flask.request.json:
+        geo_sort_def = True
+        geo_sort = True if flask.request.json['geo_sort'] \
+            else False
+
+    force_connect = None
+    force_connect_def = False
+    if 'force_connect' in flask.request.json:
+        force_connect_def = True
+        force_connect = True if flask.request.json['force_connect'] \
+            else False
+
+    route_dns = None
+    route_dns_def = False
+    if 'route_dns' in flask.request.json:
+        route_dns_def = True
+        route_dns = True if flask.request.json['route_dns'] \
+            else False
+
+    device_auth = None
+    device_auth_def = False
+    if 'device_auth' in flask.request.json:
+        device_auth_def = True
+        device_auth = True if flask.request.json['device_auth'] \
+            else False
 
     restrict_routes = None
     restrict_routes_def = False
@@ -231,6 +319,23 @@ def server_put_post(server_id=None):
         if port < 1 or port > 65535:
             return _port_invalid()
 
+    port_wg = None
+    port_wg_def = False
+    if wg and 'port_wg' in flask.request.json and \
+            flask.request.json['port_wg'] != 0:
+        port_wg_def = True
+        port_wg = flask.request.json['port_wg']
+
+        try:
+            port_wg = int(port_wg)
+        except ValueError:
+            return _port_wg_invalid()
+
+        if port_wg < 1 or port_wg > 65535:
+            return _port_wg_invalid()
+    elif not wg:
+        port_wg_def = True
+
     dh_param_bits = None
     dh_param_bits_def = False
     if flask.request.json.get('dh_param_bits'):
@@ -268,7 +373,7 @@ def server_put_post(server_id=None):
 
         for dns_server in dns_servers:
             try:
-                ipaddress.IPAddress(dns_server)
+                ipaddress.ip_address(dns_server)
             except (ipaddress.AddressValueError, ValueError):
                 return _dns_server_invalid()
 
@@ -301,6 +406,18 @@ def server_put_post(server_id=None):
         ping_timeout_def = True
         ping_timeout = int(flask.request.json['ping_timeout'] or 60)
 
+    ping_interval_wg = None
+    ping_interval_wg_def = False
+    if 'ping_interval_wg' in flask.request.json:
+        ping_interval_wg_def = True
+        ping_interval_wg = int(flask.request.json['ping_interval_wg'] or 30)
+
+    ping_timeout_wg = None
+    ping_timeout_wg_def = False
+    if 'ping_timeout_wg' in flask.request.json:
+        ping_timeout_wg_def = True
+        ping_timeout_wg = int(flask.request.json['ping_timeout_wg'] or 120)
+
     link_ping_interval = None
     link_ping_interval_def = False
     if 'link_ping_interval' in flask.request.json:
@@ -320,6 +437,13 @@ def server_put_post(server_id=None):
         inactive_timeout_def = True
         inactive_timeout = int(
             flask.request.json['inactive_timeout'] or 0) or None
+
+    session_timeout = None
+    session_timeout_def = False
+    if 'session_timeout' in flask.request.json:
+        session_timeout_def = True
+        session_timeout = int(
+            flask.request.json['session_timeout'] or 0) or None
 
     allowed_devices = None
     allowed_devices_def = False
@@ -388,6 +512,12 @@ def server_put_post(server_id=None):
         otp_auth_def = True
         otp_auth = True if flask.request.json['otp_auth'] else False
 
+    sso_auth = False
+    sso_auth_def = False
+    if 'sso_auth' in flask.request.json:
+        sso_auth_def = True
+        sso_auth = True if flask.request.json['sso_auth'] else False
+
     mss_fix = None
     mss_fix_def = False
     if 'mss_fix' in flask.request.json:
@@ -395,6 +525,28 @@ def server_put_post(server_id=None):
         mss_fix = flask.request.json['mss_fix'] or None
         if mss_fix:
             mss_fix = int(mss_fix) or None
+
+    tun_mtu = None
+    tun_mtu_def = False
+    if 'tun_mtu' in flask.request.json:
+        tun_mtu_def = True
+        tun_mtu = flask.request.json['tun_mtu'] or None
+        if tun_mtu:
+            tun_mtu = int(tun_mtu) or None
+
+    fragment = None
+    fragment_def = False
+    if 'fragment' in flask.request.json:
+        fragment_def = True
+        fragment = flask.request.json['fragment'] or None
+        if fragment:
+            fragment = int(fragment) or None
+
+    multihome = False
+    multihome_def = False
+    if 'multihome' in flask.request.json:
+        multihome_def = True
+        multihome = True if flask.request.json['multihome'] else False
 
     lzo_compression = False
     lzo_compression_def = False
@@ -450,8 +602,8 @@ def server_put_post(server_id=None):
 
         if not network_def:
             network_def = True
-            rand_range = range(215, 250)
-            rand_range_low = range(15, 215)
+            rand_range = list(range(215, 250))
+            rand_range_low = list(range(15, 215))
             random.shuffle(rand_range)
             random.shuffle(rand_range_low)
             rand_range += rand_range_low
@@ -466,9 +618,30 @@ def server_put_post(server_id=None):
                     'error_msg': NETWORK_IN_USE_MSG,
                 }, 400)
 
+        if wg and not network_wg_def:
+            network_used.add(ipaddress.ip_network(network))
+
+            network_wg_def = True
+            rand_range = list(range(215, 250))
+            rand_range_low = list(range(15, 215))
+            random.shuffle(rand_range)
+            random.shuffle(rand_range_low)
+            rand_range += rand_range_low
+            for i in rand_range:
+                rand_network_wg = '192.168.%s.0/24' % i
+                if not _check_network_overlap(
+                        rand_network_wg, network_used):
+                    network_wg = rand_network_wg
+                    break
+            if not network_wg:
+                return utils.jsonify({
+                    'error': NETWORK_WG_IN_USE,
+                    'error_msg': NETWORK_WG_IN_USE_MSG,
+                }, 400)
+
         if not port_def:
             port_def = True
-            rand_ports = range(10000, 19999)
+            rand_ports = list(range(10000, 19999))
             random.shuffle(rand_ports)
             for rand_port in rand_ports:
                 if '%s%s' % (rand_port, protocol) not in port_used:
@@ -480,31 +653,60 @@ def server_put_post(server_id=None):
                     'error_msg': PORT_PROTOCOL_IN_USE_MSG,
                 }, 400)
 
+        if wg and not port_wg_def:
+            port_used.add(port)
+
+            port_wg_def = True
+            rand_port_wgs = list(range(10000, 19999))
+            random.shuffle(rand_port_wgs)
+            for rand_port_wg in rand_port_wgs:
+                if '%s%s' % (rand_port_wg, protocol) not in port_used:
+                    port_wg = rand_port_wg
+                    break
+            if not port_wg:
+                return utils.jsonify({
+                    'error': PORT_WG_IN_USE,
+                    'error_msg': PORT_WG_IN_USE_MSG,
+                }, 400)
+
         if not dh_param_bits_def:
             dh_param_bits_def = True
             dh_param_bits = settings.vpn.default_dh_param_bits
 
     changed = None
+    allow_online = True
 
     if not server_id:
         svr = server.new_server(
             name=name,
             network=network,
+            network_wg=network_wg,
             groups=groups,
             network_mode=network_mode,
             network_start=network_start,
             network_end=network_end,
+            hide_ovpn=hide_ovpn,
+            ovpn_dco=ovpn_dco,
+            dynamic_firewall=dynamic_firewall,
+            bypass_sso_auth=bypass_sso_auth,
+            geo_sort=geo_sort,
+            force_connect=force_connect,
+            route_dns=route_dns,
+            device_auth=device_auth,
             restrict_routes=restrict_routes,
+            wg=wg,
             ipv6=ipv6,
             ipv6_firewall=ipv6_firewall,
             bind_address=bind_address,
             port=port,
+            port_wg=port_wg,
             protocol=protocol,
             dh_param_bits=dh_param_bits,
             multi_device=multi_device,
             dns_servers=dns_servers,
             search_domain=search_domain,
             otp_auth=otp_auth,
+            sso_auth=sso_auth,
             cipher=cipher,
             hash=hash,
             block_outside_dns=block_outside_dns,
@@ -513,9 +715,12 @@ def server_put_post(server_id=None):
             inter_client=inter_client,
             ping_interval=ping_interval,
             ping_timeout=ping_timeout,
+            ping_interval_wg=ping_interval_wg,
+            ping_timeout_wg=ping_timeout_wg,
             link_ping_interval=link_ping_interval,
             link_ping_timeout=link_ping_timeout,
             inactive_timeout=inactive_timeout,
+            session_timeout=session_timeout,
             allowed_devices=allowed_devices,
             max_clients=max_clients,
             max_devices=max_devices,
@@ -525,6 +730,9 @@ def server_put_post(server_id=None):
             debug=debug,
             pre_connect_msg=pre_connect_msg,
             mss_fix=mss_fix,
+            tun_mtu=tun_mtu,
+            fragment=fragment,
+            multihome=multihome,
         )
         svr.add_host(settings.local.host_id)
     else:
@@ -532,90 +740,197 @@ def server_put_post(server_id=None):
 
         if name_def:
             svr.name = name
-        if network_def:
+        if network_def and svr.network != network:
+            allow_online = False
             svr.network = network
-        if groups_def:
+        if network_wg_def and svr.network_wg != network_wg:
+            allow_online = False
+            svr.network_wg = network_wg
+        if groups_def and svr.groups != groups:
+            allow_online = False # TODO
             svr.groups = groups
-        if network_start_def:
+        if network_start_def and svr.network_start != network_start:
+            allow_online = False
             svr.network_start = network_start
-        if network_end_def:
+        if network_end_def and svr.network_end != network_end:
+            allow_online = False
             svr.network_end = network_end
-        if restrict_routes_def:
+        if hide_ovpn_def:
+            svr.hide_ovpn = hide_ovpn
+        if ovpn_dco_def and svr.ovpn_dco != ovpn_dco:
+            allow_online = False
+            svr.ovpn_dco = ovpn_dco
+        if dynamic_firewall_def and svr.dynamic_firewall != dynamic_firewall:
+            allow_online = False
+            svr.dynamic_firewall = dynamic_firewall
+        if bypass_sso_auth_def and svr.bypass_sso_auth != bypass_sso_auth:
+            allow_online = False
+            svr.bypass_sso_auth = bypass_sso_auth
+        if geo_sort_def:
+            svr.geo_sort = geo_sort
+        if force_connect_def:
+            svr.force_connect = force_connect
+        if route_dns_def and svr.route_dns != route_dns:
+            allow_online = False
+            svr.route_dns = route_dns
+        if device_auth_def and svr.device_auth != device_auth:
+            allow_online = False
+            svr.device_auth = device_auth
+        if restrict_routes_def and svr.restrict_routes != restrict_routes:
+            allow_online = False
             svr.restrict_routes = restrict_routes
-        if ipv6_def:
+        if wg_def and svr.wg != wg:
+            allow_online = False
+            svr.wg = wg
+        if ipv6_def and svr.ipv6 != ipv6:
+            allow_online = False
             svr.ipv6 = ipv6
-        if ipv6_firewall_def:
+        if ipv6_firewall_def and svr.ipv6_firewall != ipv6_firewall:
+            allow_online = False
             svr.ipv6_firewall = ipv6_firewall
-        if network_mode_def:
+        if network_mode_def and svr.network_mode != network_mode:
+            allow_online = False
             svr.network_mode = network_mode
-        if bind_address_def:
+        if bind_address_def and svr.bind_address != bind_address:
+            allow_online = False
             svr.bind_address = bind_address
-        if port_def:
+        if port_def and svr.port != port:
+            allow_online = False
             svr.port = port
-        if protocol_def:
+        if port_wg_def and svr.port_wg != port_wg:
+            allow_online = False
+            svr.port_wg = port_wg
+        if protocol_def and svr.protocol != protocol:
+            allow_online = False
             svr.protocol = protocol
         if dh_param_bits_def and svr.dh_param_bits != dh_param_bits:
+            allow_online = False
             svr.dh_param_bits = dh_param_bits
             svr.generate_dh_param()
-        if multi_device_def:
+        if multi_device_def and svr.multi_device != multi_device:
+            allow_online = False
             svr.multi_device = multi_device
-        if dns_servers_def:
+        if dns_servers_def and svr.dns_servers != dns_servers:
+            allow_online = False # TODO
             svr.dns_servers = dns_servers
-        if search_domain_def:
+        if search_domain_def and svr.search_domain != search_domain:
+            allow_online = False # TODO
             svr.search_domain = search_domain
-        if otp_auth_def:
+        if otp_auth_def and svr.otp_auth != otp_auth:
+            allow_online = False
             svr.otp_auth = otp_auth
-        if cipher_def:
+        if sso_auth_def and svr.sso_auth != sso_auth:
+            allow_online = False
+            svr.sso_auth = sso_auth
+        if cipher_def and svr.cipher != cipher:
+            allow_online = False
             svr.cipher = cipher
-        if hash_def:
+        if hash_def and svr.hash != hash:
+            allow_online = False
             svr.hash = hash
         if block_outside_dns_def:
             svr.block_outside_dns = block_outside_dns
-        if jumbo_frames_def:
+        if jumbo_frames_def and svr.jumbo_frames != jumbo_frames:
+            allow_online = False
             svr.jumbo_frames = jumbo_frames
-        if lzo_compression_def:
+        if lzo_compression_def and svr.lzo_compression != lzo_compression:
+            allow_online = False
             svr.lzo_compression = lzo_compression
-        if inter_client_def:
+        if inter_client_def and svr.inter_client != inter_client:
+            allow_online = False
             svr.inter_client = inter_client
-        if ping_interval_def:
+        if ping_interval_def and svr.ping_interval != ping_interval:
+            allow_online = False
             svr.ping_interval = ping_interval
-        if ping_timeout_def:
+        if ping_timeout_def and svr.ping_timeout != ping_timeout:
+            allow_online = False
             svr.ping_timeout = ping_timeout
-        if link_ping_interval_def:
+        if ping_interval_wg_def and svr.ping_interval_wg != ping_interval_wg:
+            allow_online = False # TODO
+            svr.ping_interval_wg = ping_interval_wg
+        if ping_timeout_wg_def and svr.ping_timeout_wg != ping_timeout_wg:
+            allow_online = False # TODO
+            svr.ping_timeout_wg = ping_timeout_wg
+        if link_ping_interval_def and \
+                svr.link_ping_interval != link_ping_interval:
+            allow_online = False # TODO
             svr.link_ping_interval = link_ping_interval
-        if link_ping_timeout_def:
+        if link_ping_timeout_def and \
+                svr.link_ping_timeout != link_ping_timeout:
+            allow_online = False # TODO
             svr.link_ping_timeout = link_ping_timeout
-        if inactive_timeout_def:
+        if inactive_timeout_def and svr.inactive_timeout != inactive_timeout:
+            allow_online = False # TODO
             svr.inactive_timeout = inactive_timeout
-        if allowed_devices_def:
+        if session_timeout_def and svr.session_timeout != session_timeout:
+            allow_online = False # TODO
+            svr.session_timeout = session_timeout
+        if allowed_devices_def and svr.allowed_devices != allowed_devices:
+            allow_online = False # TODO
             svr.allowed_devices = allowed_devices
-        if max_clients_def:
+        if max_clients_def and svr.max_clients != max_clients:
+            allow_online = False # TODO
             svr.max_clients = max_clients
-        if max_devices_def:
+        if max_devices_def and svr.max_devices != max_devices:
+            allow_online = False # TODO
             svr.max_devices = max_devices
         if replica_count_def:
             svr.replica_count = replica_count
-        if vxlan_def:
+        if vxlan_def and svr.vxlan != vxlan:
+            allow_online = False
             svr.vxlan = vxlan
-        if dns_mapping_def:
+        if dns_mapping_def and svr.dns_mapping != dns_mapping:
+            allow_online = False
             svr.dns_mapping = dns_mapping
-        if debug_def:
+        if debug_def and svr.debug != debug:
+            allow_online = False
             svr.debug = debug
         if pre_connect_msg_def:
             svr.pre_connect_msg = pre_connect_msg
-        if mss_fix_def:
+        if mss_fix_def and svr.mss_fix != mss_fix:
+            allow_online = False
             svr.mss_fix = mss_fix
+        if tun_mtu_def and svr.tun_mtu != tun_mtu:
+            allow_online = False
+            svr.tun_mtu = tun_mtu
+        if fragment_def and svr.fragment != fragment:
+            allow_online = False
+            svr.fragment = fragment
+        if multihome_def and svr.multihome != multihome:
+            allow_online = False
+            svr.multihome = multihome
 
         changed = svr.changed
 
     svr.generate_auth_key()
 
-    err, err_msg = svr.validate_conf()
+    err, err_msg = svr.validate_conf(allow_online=allow_online)
     if err:
         return utils.jsonify({
             'error': err,
             'error_msg': err_msg,
         }, 400)
+
+    dns_server_route = ''
+    for dns_server in svr.dns_servers:
+        try:
+            if ':' in dns_server:
+                dns_server_route = str(
+                    ipaddress.ip_address(dns_server)) + '/128'
+            else:
+                dns_server_route = str(
+                    ipaddress.ip_address(dns_server)) + '/32'
+            break
+        except (ipaddress.AddressValueError, ValueError):
+            pass
+
+    if dns_server_route:
+        for route in svr.routes:
+            if route.get('comment') == 'DNS Server' and \
+                    route['network'] != dns_server_route:
+                route['network'] = dns_server_route
+                if changed:
+                    changed.add('routes')
 
     svr.commit(changed)
 
@@ -634,10 +949,24 @@ def server_delete(server_id):
     if settings.app.demo_mode:
         return utils.demo_blocked()
 
-    svr = server.get_by_id(server_id, fields=('_id', 'name', 'organizations'))
-    svr.remove()
+    svr = server.get_by_id(server_id, fields=(
+        '_id', 'name', 'organizations', 'links'))
+
+    try:
+        link_ids = svr.remove()
+    except ServerLinkOnlineError:
+        return utils.jsonify({
+            'error': SERVER_NOT_OFFLINE,
+            'error_msg': SERVER_NOT_OFFLINE_UNLINK_SERVER_MSG,
+        }, 400)
+
     logger.LogEntry(message='Deleted server "%s".' % svr.name)
+
     event.Event(type=SERVERS_UPDATED)
+    event.Event(type=SERVER_LINKS_UPDATED, resource_id=server_id)
+    for link_id in link_ids:
+        event.Event(type=SERVER_LINKS_UPDATED, resource_id=link_id)
+
     for org in svr.iter_orgs():
         event.Event(type=USERS_UPDATED, resource_id=org.id)
     return utils.jsonify({})
@@ -668,8 +997,8 @@ def server_org_put(server_id, org_id):
         return utils.demo_blocked()
 
     svr = server.get_by_id(server_id,
-        fields=('_id', 'status', 'network', 'network_start', 'network_end',
-        'organizations', 'routes', 'ipv6'))
+        fields=('_id', 'wg', 'status', 'network', 'network_wg',
+        'network_start', 'network_end', 'organizations', 'routes', 'ipv6'))
     org = organization.get_by_id(org_id, fields=('_id', 'name'))
     if svr.status == ONLINE:
         return utils.jsonify({
@@ -696,8 +1025,8 @@ def server_org_delete(server_id, org_id):
         return utils.demo_blocked()
 
     svr = server.get_by_id(server_id,
-        fields=('_id', 'status', 'network', 'network_start',
-            'network_end', 'primary_organization',
+        fields=('_id', 'wg', 'status', 'network', 'network_wg',
+            'network_start', 'network_end', 'primary_organization',
             'primary_user', 'organizations', 'routes', 'ipv6'))
     org = organization.get_by_id(org_id, fields=('_id'))
 
@@ -725,10 +1054,12 @@ def server_route_get(server_id):
         if resp:
             return utils.jsonify(resp)
 
-    svr = server.get_by_id(server_id, fields=('_id', 'network', 'links',
-        'network_start', 'network_end', 'routes', 'organizations', 'ipv6'))
+    svr = server.get_by_id(server_id, fields=('_id', 'wg', 'network',
+        'network_wg', 'links', 'network_start', 'network_end', 'routes',
+        'route_dns', 'dns_servers', 'organizations', 'ipv6'))
 
-    resp = svr.get_routes(include_server_links=True, include_hidden=True)
+    resp = svr.get_routes(include_server_links=True, include_hidden=True,
+        include_dns_routes=False)
     if settings.app.demo_mode:
         utils.demo_set_cache(resp)
     return utils.jsonify(resp)
@@ -885,7 +1216,7 @@ def server_route_put(server_id, route_network):
         return utils.demo_blocked()
 
     svr = server.get_by_id(server_id)
-    route_network = route_network.decode('hex')
+    route_network = bytes.fromhex(route_network).decode()
     comment = flask.request.json.get('comment') or None
     metric = flask.request.json.get('metric') or None
     nat_route = True if flask.request.json.get('nat') else False
@@ -956,7 +1287,7 @@ def server_route_delete(server_id, route_network):
         return utils.demo_blocked()
 
     svr = server.get_by_id(server_id)
-    route_network = route_network.decode('hex')
+    route_network = bytes.fromhex(route_network).decode()
 
     try:
         route = svr.remove_route(route_network)
@@ -1031,7 +1362,7 @@ def server_host_put(server_id, host_id):
     hst = host.get_by_id(host_id, fields=('_id', 'name',
         'public_address', 'auto_public_address', 'auto_public_host',
         'public_address6', 'auto_public_address6', 'auto_public_host6'))
-    if not svr:
+    if not hst:
         return flask.abort(404)
 
     try:

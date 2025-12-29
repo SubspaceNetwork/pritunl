@@ -7,6 +7,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import serialization
 
 import os
+import uuid
 
 def create_server_cert():
     from pritunl import acme
@@ -15,29 +16,9 @@ def create_server_cert():
         acme.update_acme_cert()
         return
 
-    server_cert_path, server_key_path = generate_server_cert()
-
-    with open(server_cert_path, 'r') as server_cert_file:
-        settings.app.server_cert = server_cert_file.read().strip()
-    with open(server_key_path, 'r') as server_key_file:
-        settings.app.server_key = server_key_file.read().strip()
-
-def write_server_cert(server_cert, server_key, acme_domain):
-    server_cert_path = os.path.join(settings.conf.temp_path, SERVER_CERT_NAME)
-    server_key_path = os.path.join(settings.conf.temp_path, SERVER_KEY_NAME)
-
-    server_cert_full = server_cert
-
-    if acme_domain:
-        server_cert_full += LETS_ENCRYPT_INTER
-
-    with open(server_cert_path, 'w') as server_cert_file:
-        server_cert_file.write(server_cert_full)
-    with open(server_key_path, 'w') as server_key_file:
-        os.chmod(server_key_path, 0600)
-        server_key_file.write(server_key)
-
-    return server_cert_path, server_key_path
+    server_cert, server_key = generate_server_cert()
+    settings.app.server_cert = server_cert
+    settings.app.server_key = server_key
 
 def generate_server_cert():
     server_cert_path = os.path.join(settings.conf.temp_path, SERVER_CERT_NAME)
@@ -52,9 +33,17 @@ def generate_server_cert():
         '-key', server_key_path,
         '-out', server_cert_path,
     ])
-    os.chmod(server_key_path, 0600)
+    os.chmod(server_key_path, 0o600)
 
-    return server_cert_path, server_key_path
+    with open(server_cert_path, 'r') as server_cert_file:
+        server_cert = server_cert_file.read().strip()
+    with open(server_key_path, 'r') as server_key_file:
+        server_key = server_key_file.read().strip()
+
+    os.remove(server_cert_path)
+    os.remove(server_key_path)
+
+    return server_cert, server_key
 
 def generate_private_key():
     return check_output_logged([
@@ -66,11 +55,14 @@ def generate_private_ec_key():
         'openssl', 'ecparam', '-name', 'secp384r1', '-genkey', '-noout',
     ])
 
-def generate_csr(private_key, domain):
-    private_key_path = get_temp_path() + '.key'
+def generate_csr(private_key, domain, cmdline=False):
+    if cmdline:
+        private_key_path = '/tmp/pritunl_' + uuid.uuid4().hex + '.key'
+    else:
+        private_key_path = get_temp_path() + '.key'
 
     with open(private_key_path, 'w') as private_key_file:
-        os.chmod(private_key_path, 0600)
+        os.chmod(private_key_path, 0o600)
         private_key_file.write(private_key)
 
     csr = check_output_logged([
@@ -108,4 +100,4 @@ def generate_rsa_key():
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
 
-    return private_pem.strip(), public_pem.strip()
+    return private_pem.decode().strip(), public_pem.decode().strip()

@@ -5,6 +5,8 @@ import sys
 import os
 import time
 import json
+import uuid
+import shutil
 
 USAGE = """\
 Usage: pritunl [command] [options]
@@ -18,10 +20,36 @@ Commands:
   reset-password        Reset administrator password
   reset-version         Reset database version to server version
   reset-ssl-cert        Reset the server ssl certificate
+  renew-ssl-cert        Renew the Lets Encrypt server ssl certificate
+  renew-org             Renew organization and user certificates
   reconfigure           Reconfigure database connection
+  clear-message-cache   Clear the cache of the internal message system
+  disable-admin-api     Disable API key authentication for all admin users
+  override-device-key   Allow device registration without key for 8 hours
+  require-device-key    Remove device registration key override
+  get-mongodb           Get the current mongodb uri
   set-mongodb           Set the mongodb uri
+  get-host-id           Get the current host id
+  set-host-id           Set the host id
   logs                  View server logs
+  clear-auth-limit      Reset failed authentication attempt limiter
   clear-logs            Clear server logs"""
+
+ascii_art = r"""##############################################################
+#                                                            #
+#                      /$$   /$$                         /$$ #
+#                     |__/  | $$                        | $$ #
+#   /$$$$$$   /$$$$$$  /$$ /$$$$$$   /$$   /$$ /$$$$$$$ | $$ #
+#  /$$__  $$ /$$__  $$| $$|_  $$_/  | $$  | $$| $$__  $$| $$ #
+# | $$  \ $$| $$  \__/| $$  | $$    | $$  | $$| $$  \ $$| $$ #
+# | $$  | $$| $$      | $$  | $$ /$$| $$  | $$| $$  | $$| $$ #
+# | $$$$$$$/| $$      | $$  |  $$$$/|  $$$$$$/| $$  | $$| $$ #
+# | $$____/ |__/      |__/   \____/  \______/ |__/  |__/|__/ #
+# | $$                                                       #
+# | $$                                                       #
+# |__/                                                       #
+#                                                            #
+##############################################################"""
 
 def main(default_conf=None):
     if len(sys.argv) > 1:
@@ -49,6 +77,8 @@ def main(default_conf=None):
             help='Limit log lines')
         parser.add_option('--natural', action='store_true',
             help='Natural log sort')
+        parser.add_option('--unformatted', action='store_true',
+            help='Disable terminal color formatting')
     elif cmd == 'set':
         parser.disable_interspersed_args()
 
@@ -61,14 +91,14 @@ def main(default_conf=None):
     pritunl.set_conf_path(conf_path)
 
     if cmd == 'version':
-        print '%s v%s' % (pritunl.__title__, pritunl.__version__)
+        print('%s v%s' % (pritunl.__title__, pritunl.__version__))
         sys.exit(0)
     elif cmd == 'setup-key':
         from pritunl import setup
         from pritunl import settings
 
         setup.setup_loc()
-        print settings.local.setup_key
+        print(settings.local.setup_key)
 
         sys.exit(0)
     elif cmd == 'reset-version':
@@ -80,7 +110,7 @@ def main(default_conf=None):
         utils.set_db_ver(pritunl.__version__, MIN_DATABASE_VER)
 
         time.sleep(.2)
-        print 'Database version reset to %s' % pritunl.__version__
+        print('Database version reset to %s' % pritunl.__version__)
 
         sys.exit(0)
     elif cmd == 'reset-password':
@@ -90,8 +120,8 @@ def main(default_conf=None):
         setup.setup_db()
         username, password = auth.reset_password()
 
-        print 'Administrator password successfully reset:\n' + \
-            '  username: "%s"\n  password: "%s"' % (username, password)
+        print('Administrator password successfully reset:\n' + \
+            '  username: "%s"\n  password: "%s"' % (username, password))
 
         sys.exit(0)
     elif cmd == 'default-password':
@@ -102,10 +132,10 @@ def main(default_conf=None):
         username, password = auth.get_default_password()
 
         if not password:
-            print 'No default password available, use reset-password'
+            print('No default password available, use reset-password')
         else:
-            print 'Administrator default password:\n' + \
-                '  username: "%s"\n  password: "%s"' % (username, password)
+            print('Administrator default password:\n' + \
+                '  username: "%s"\n  password: "%s"' % (username, password))
 
         sys.exit(0)
     elif cmd == 'reconfigure':
@@ -117,7 +147,7 @@ def main(default_conf=None):
         settings.conf.commit()
 
         time.sleep(.2)
-        print 'Database configuration successfully reset'
+        print('Database configuration successfully reset')
 
         sys.exit(0)
     elif cmd == 'get':
@@ -141,14 +171,14 @@ def main(default_conf=None):
 
         if key_str:
             val = getattr(group, key_str)
-            print '%s.%s = %s' % (group_str, key_str,
-                json.dumps(val, default=lambda x: str(x)))
+            print('%s.%s = %s' % (group_str, key_str,
+                json.dumps(val, default=lambda x: str(x))))
 
         else:
             for field in group.fields:
                 val = getattr(group, field)
-                print '%s.%s = %s' % (group_str, field,
-                    json.dumps(val, default=lambda x: str(x)))
+                print('%s.%s = %s' % (group_str, field,
+                    json.dumps(val, default=lambda x: str(x))))
 
         sys.exit(0)
     elif cmd == 'set':
@@ -187,11 +217,11 @@ def main(default_conf=None):
 
         time.sleep(.2)
 
-        print '%s.%s = %s' % (group_str, key_str,
-            json.dumps(getattr(group, key_str), default=lambda x: str(x)))
-        print 'Successfully updated configuration. This change is ' \
+        print('%s.%s = %s' % (group_str, key_str,
+            json.dumps(getattr(group, key_str), default=lambda x: str(x))))
+        print('Successfully updated configuration. This change is ' \
             'stored in the database and has been applied to all hosts ' \
-            'in the cluster.'
+            'in the cluster.')
 
         sys.exit(0)
     elif cmd == 'unset':
@@ -212,11 +242,46 @@ def main(default_conf=None):
 
         time.sleep(.2)
 
-        print '%s.%s = %s' % (group_str, key_str,
-            json.dumps(getattr(group, key_str), default=lambda x: str(x)))
-        print 'Successfully updated configuration. This change is ' \
+        print('%s.%s = %s' % (group_str, key_str,
+            json.dumps(getattr(group, key_str), default=lambda x: str(x))))
+        print('Successfully updated configuration. This change is ' \
             'stored in the database and has been applied to all hosts ' \
-            'in the cluster.'
+            'in the cluster.')
+
+        sys.exit(0)
+    elif cmd == 'override-device-key':
+        from pritunl import setup
+        from pritunl import settings
+        setup.setup_db_host()
+
+        settings.user.device_key_override = int(time.time())
+        settings.commit()
+
+        time.sleep(.2)
+
+        print('Device registration key override active for 8 hours. ' +
+            'Use command require-device-key to reactivate.')
+
+        sys.exit(0)
+    elif cmd == 'require-device-key':
+        from pritunl import setup
+        from pritunl import settings
+        setup.setup_db_host()
+
+        settings.user.device_key_override = None
+        settings.commit()
+
+        time.sleep(.2)
+
+        print('Device registration key override deactivated.')
+
+        sys.exit(0)
+    elif cmd == 'get-mongodb':
+        from pritunl import setup
+        from pritunl import settings
+        setup.setup_loc()
+
+        print(settings.conf.mongodb_uri)
 
         sys.exit(0)
     elif cmd == 'set-mongodb':
@@ -233,7 +298,32 @@ def main(default_conf=None):
         settings.conf.commit()
 
         time.sleep(.2)
-        print 'Database configuration successfully set'
+        print('Database configuration successfully set')
+
+        sys.exit(0)
+    elif cmd == 'get-host-id':
+        from pritunl import setup
+        from pritunl import settings
+        setup.setup_loc()
+
+        print(settings.local.host_id)
+
+        sys.exit(0)
+    elif cmd == 'set-host-id':
+        from pritunl import setup
+        from pritunl import settings
+        setup.setup_loc()
+
+        if len(args) > 1:
+            host_id = args[1]
+        else:
+            host_id = None
+
+        with open(settings.conf.uuid_path, 'w') as uuid_file:
+            uuid_file.write(host_id.strip())
+
+        time.sleep(.2)
+        print('Host ID successfully set')
 
         sys.exit(0)
     elif cmd == 'reset-ssl-cert':
@@ -249,7 +339,114 @@ def main(default_conf=None):
         settings.commit()
 
         time.sleep(.2)
-        print 'Server ssl certificate successfully reset'
+        print('Server ssl certificate successfully reset')
+
+        sys.exit(0)
+    elif cmd == 'renew-ssl-cert':
+        from pritunl import setup
+        from pritunl import settings
+        from pritunl import acme
+        setup.setup_db()
+
+        if not settings.app.acme_domain:
+            print('Server does not have Lets Encrypt domain configured')
+            sys.exit(0)
+
+        acme.update_acme_cert(True)
+
+        time.sleep(.2)
+        print('Server ssl certificate successfully renewed')
+
+        sys.exit(0)
+    elif cmd == 'renew-org':
+        from pritunl.constants import (
+            CERT_SERVER, CERT_CLIENT_POOL, CERT_SERVER_POOL
+        )
+        from pritunl import setup
+        from pritunl import settings
+        from pritunl import organization
+        from pritunl import server
+        from pritunl import database
+        setup.setup_db()
+        temp_path = '/tmp/pritunl_' + uuid.uuid4().hex
+        settings.conf.temp_path = temp_path
+
+        if len(args) > 1:
+            org_id = database.ParseObjectId(args[1])
+        else:
+            print('Missing required organization ID. Hold shift and click ' +
+                'the green organization label in the web console to ' +
+                'get the ID.')
+            sys.exit(1)
+
+        org = organization.get_by_id(org_id)
+        if not org:
+            print('Failed to find organization. Hold shift and click ' +
+                'the green organization label in the web console to ' +
+                'get the ID.')
+            sys.exit(1)
+
+        print(f'Renewing organization: {org.name}')
+        org.renew()
+        org.commit()
+
+        i = 0
+        count, users = org.iter_users_all()
+        for usr in users:
+            i += 1
+            if usr.type == CERT_CLIENT_POOL:
+                print(f'Renewing reserve user [{i}/{count}]: {usr.id}')
+            elif usr.type == CERT_SERVER_POOL:
+                print(f'Renewing reserve server user [{i}/{count}]: {usr.id}')
+            elif usr.type == CERT_SERVER:
+                print(f'Renewing server user [{i}/{count}]: {usr.id}')
+            else:
+                print(f'Renewing user [{i}/{count}]: {usr.name}')
+            usr.renew()
+            usr.commit()
+
+        for svr in server.iter_servers():
+            print(f'Refreshing server configuration: {svr.name}')
+            svr.generate_ca_cert()
+            svr.commit('ca_certificate')
+
+        time.sleep(1)
+        print('Organization renewal complete')
+
+        shutil.rmtree(temp_path, ignore_errors=True)
+        sys.exit(0)
+    elif cmd == 'clear-message-cache':
+        from pritunl import setup
+        from pritunl import logger
+        from pritunl import mongo
+        from pritunl import settings
+        from pritunl import utils
+
+        setup.setup_db()
+
+        print('Clearing message cache...')
+
+        prefix = settings.conf.mongodb_collection_prefix or ''
+        mongo.get_collection('messages').drop()
+        mongo.secondary_database.create_collection(
+            prefix + 'messages', capped=True,
+            size=20971520, max=5000)
+        mongo.get_collection('messages').insert_one({
+            'message': None,
+            'timestamp': utils.now(),
+        })
+
+        print('Message cache cleared')
+
+        sys.exit(0)
+    elif cmd == 'disable-admin-api':
+        from pritunl import setup
+        from pritunl import auth
+
+        setup.setup_db()
+        auth.disable_admin_api()
+
+        print('Administrator API token authentication disabled')
 
         sys.exit(0)
     elif cmd == 'destroy-secondary':
@@ -259,7 +456,7 @@ def main(default_conf=None):
 
         setup.setup_db()
 
-        print 'Destroying secondary database...'
+        print('Destroying secondary database...')
 
         mongo.get_collection('clients').drop()
         mongo.get_collection('clients_pool').drop()
@@ -294,7 +491,7 @@ def main(default_conf=None):
             },
         })
 
-        print 'Secondary database destroyed'
+        print('Secondary database destroyed')
 
         sys.exit(0)
     elif cmd == 'repair-database':
@@ -304,7 +501,7 @@ def main(default_conf=None):
 
         setup.setup_db()
 
-        print 'Repairing database...'
+        print('Repairing database...')
 
         mongo.get_collection('clients').drop()
         mongo.get_collection('clients_pool').drop()
@@ -323,6 +520,7 @@ def main(default_conf=None):
         mongo.get_collection('sso_push_cache').drop()
         mongo.get_collection('sso_client_cache').drop()
         mongo.get_collection('sso_passcode_cache').drop()
+        mongo.get_collection('acme_challenges').drop()
 
         mongo.get_collection('logs').drop()
         mongo.get_collection('log_entries').drop()
@@ -365,7 +563,7 @@ def main(default_conf=None):
             },
         })
 
-        print 'Database repair complete'
+        print('Database repair complete')
 
         sys.exit(0)
     elif cmd == 'logs':
@@ -380,16 +578,30 @@ def main(default_conf=None):
                 archive_path = args[1]
             else:
                 archive_path = './'
-            print 'Log archived to: ' + log_view.archive_log(archive_path,
-                options.natural, options.limit)
+            print('Log archived to: ' + log_view.archive_log(archive_path,
+                options.natural, options.limit))
         elif options.tail:
             for msg in log_view.tail_log_lines():
-                print msg
+                print(msg)
         else:
-            print log_view.get_log_lines(
+            print(log_view.get_log_lines(
                 natural=options.natural,
                 limit=options.limit,
-            )
+                formatted=not options.unformatted,
+            ))
+
+        sys.exit(0)
+    elif cmd == 'clear-auth-limit':
+        from pritunl import setup
+        from pritunl import logger
+        from pritunl import mongo
+        from pritunl import settings
+
+        setup.setup_db()
+
+        mongo.get_collection('auth_limiter').delete_many({})
+
+        print('Auth limiter cleared')
 
         sys.exit(0)
     elif cmd == 'clear-logs':
@@ -413,6 +625,8 @@ def main(default_conf=None):
         mongo.database.create_collection(prefix + 'log_entries', capped=True,
             size=log_entry_limit * 512, max=log_entry_limit)
 
+        print('Log entries cleared')
+
         sys.exit(0)
     elif cmd != 'start':
         raise ValueError('Invalid command')
@@ -430,21 +644,7 @@ def main(default_conf=None):
                     pid_file.write('%s' % pid)
             sys.exit(0)
     elif not options.quiet:
-        print '##############################################################'
-        print '#                                                            #'
-        print '#                      /$$   /$$                         /$$ #'
-        print '#                     |__/  | $$                        | $$ #'
-        print '#   /$$$$$$   /$$$$$$  /$$ /$$$$$$   /$$   /$$ /$$$$$$$ | $$ #'
-        print '#  /$$__  $$ /$$__  $$| $$|_  $$_/  | $$  | $$| $$__  $$| $$ #'
-        print '# | $$  \ $$| $$  \__/| $$  | $$    | $$  | $$| $$  \ $$| $$ #'
-        print '# | $$  | $$| $$      | $$  | $$ /$$| $$  | $$| $$  | $$| $$ #'
-        print '# | $$$$$$$/| $$      | $$  |  $$$$/|  $$$$$$/| $$  | $$| $$ #'
-        print '# | $$____/ |__/      |__/   \____/  \______/ |__/  |__/|__/ #'
-        print '# | $$                                                       #'
-        print '# | $$                                                       #'
-        print '# |__/                                                       #'
-        print '#                                                            #'
-        print '##############################################################'
+        print(ascii_art)
 
     pritunl.init_server()
 

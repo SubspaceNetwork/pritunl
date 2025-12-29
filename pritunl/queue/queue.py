@@ -8,6 +8,7 @@ from pritunl import logger
 from pritunl import mongo
 from pritunl import messenger
 from pritunl import utils
+from pritunl import database
 
 import datetime
 import threading
@@ -39,11 +40,11 @@ class Queue(mongo.MongoObject):
     reserve_id = None
 
     def __init__(self, priority=None, retry=None, **kwargs):
-        mongo.MongoObject.__init__(self, **kwargs)
+        mongo.MongoObject.__init__(self)
         self.ttl = settings.mongo.queue_ttl
         self.type = self.type
         self.reserve_id = self.reserve_id
-        self.runner_id = utils.ObjectId()
+        self.runner_id = database.ObjectId()
         self.claimed = False
         self.queue_com = QueueCom()
         self.keep_alive_thread = None
@@ -52,6 +53,9 @@ class Queue(mongo.MongoObject):
             self.priority = priority
         if retry is not None:
             self.retry = retry
+
+    def __lt__(self, other):
+        return self.runner_id < other.runner_id
 
     @cached_static_property
     def collection(cls):
@@ -69,14 +73,14 @@ class Queue(mongo.MongoObject):
             time.sleep(self.ttl - 6)
             if self.queue_com.state in (COMPLETE, STOPPED):
                 break
-            response = self.collection.update({
+            response = self.collection.update_one({
                 '_id': self.id,
                 'runner_id': self.runner_id,
             }, {'$set': {
                 'ttl_timestamp': utils.now() + \
                     datetime.timedelta(seconds=self.ttl),
             }})
-            if response['updatedExisting']:
+            if bool(response.modified_count):
                 messenger.publish('queue', [UPDATE, self.id])
             else:
                 self.queue_com.state_lock.acquire()
@@ -94,26 +98,24 @@ class Queue(mongo.MongoObject):
         if self.keep_alive_thread:
             return
         self.keep_alive_thread = threading.Thread(
+            name="QueueKeepAlive",
             target=self._keep_alive_thread)
         self.keep_alive_thread.daemon = True
         self.keep_alive_thread.start()
 
-    def start(self, transaction=None, block=False, block_timeout=60):
+    def start(self, block=False, block_timeout=60):
         self.ttl_timestamp = utils.now() + \
             datetime.timedelta(seconds=self.ttl)
-        self.commit(transaction=transaction)
+        self.commit()
 
         if block:
-            if transaction:
-                raise TypeError('Cannot use transaction when blocking')
             cursor_id = messenger.get_cursor_id('queue')
 
         extra = {
             'queue_doc': self.export()
         }
 
-        messenger.publish('queue', [PENDING, self.id], extra=extra,
-            transaction=transaction)
+        messenger.publish('queue', [PENDING, self.id], extra=extra)
 
         if block:
             last_update = time.time()
@@ -149,7 +151,7 @@ class Queue(mongo.MongoObject):
         doc['ttl_timestamp'] = utils.now() + \
             datetime.timedelta(seconds=self.ttl)
 
-        response = self.collection.update({
+        response = self.collection.update_one({
             '_id': self.id,
             '$or': [
                 {'runner_id': self.runner_id},
@@ -159,25 +161,25 @@ class Queue(mongo.MongoObject):
             '$set': doc,
         })
 
-        self.claimed = response['updatedExisting']
+        self.claimed = bool(response.modified_count)
 
         if self.claimed:
             self.keep_alive()
 
-        return response['updatedExisting']
+        return bool(response.modified_count)
 
     @classmethod
     def reserve(cls, reserve_id, reserve_data, block=False, block_timeout=90):
         if block:
             cursor_id = messenger.get_cursor_id('queue')
 
-        doc = cls.collection.find_and_modify({
+        doc = cls.collection.find_one_and_update({
             'state': PENDING,
             'reserve_id': reserve_id,
             'reserve_data': None,
         }, {'$set': {
             'reserve_data': reserve_data,
-        }}, new=True)
+        }}, return_document=True)
         if not doc:
             return
 

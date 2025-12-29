@@ -41,19 +41,10 @@ def user_get(org_id, user_id=None, page=None):
     if not org:
         return flask.abort(404)
 
-    if user_id:
-        usr = org.get_user(user_id)
-        if not usr:
-            return flask.abort(404)
-
-        resp = usr.dict()
-        if settings.app.demo_mode:
-            utils.demo_set_cache(resp)
-        return utils.jsonify(resp)
-
     page = flask.request.args.get('page', page)
     page = int(page) if page else page
     search = flask.request.args.get('search', None)
+    sort_last_active = flask.request.args.get('last_active', None)
     limit = int(flask.request.args.get('limit', settings.user.page_count))
     otp_auth = False
     dns_mapping = False
@@ -84,6 +75,7 @@ def user_get(org_id, user_id=None, page=None):
         'name',
         'email',
         'groups',
+        'last_active',
         'pin',
         'type',
         'auth_type',
@@ -92,13 +84,25 @@ def user_get(org_id, user_id=None, page=None):
         'disabled',
         'bypass_secondary',
         'client_to_client',
+        'mac_addresses',
         'dns_servers',
         'dns_suffix',
         'port_forwarding',
+        'devices',
     )
 
-    for usr in org.iter_users(page=page, search=search,
-            search_limit=limit, fields=fields):
+    if user_id:
+        usr = org.get_user(user_id)
+        if not usr:
+            return flask.abort(404)
+
+        query = [usr]
+    else:
+        query = org.iter_users(page=page, search=search,
+            search_limit=limit, fields=fields,
+            sort_last_active=sort_last_active == 'true')
+
+    for usr in query:
         users_id.append(usr.id)
 
         user_dict = usr.dict()
@@ -106,15 +110,13 @@ def user_get(org_id, user_id=None, page=None):
         user_dict['audit'] = settings.app.auditing == ALL
         user_dict['status'] = False
         user_dict['sso'] = settings.app.sso
-
-        if otp_auth and not usr.has_duo_passcode and not usr.has_yubikey:
-            user_dict['otp_auth'] = True
-        else:
-            user_dict['otp_auth'] = False
+        user_dict['auth_modes'] = usr.get_auth_modes(otp_auth)
 
         if dns_mapping:
             user_dict['dns_mapping'] = ('%s.%s.vpn' % (
-                str(usr.name).split('@')[0], org.name)).lower()
+                str(usr.name).split('@')[0].replace('.', '-'),
+                org.name.replace('.', '-'),
+            )).lower()
         else:
             user_dict['dns_mapping'] = None
         user_dict['network_links'] = []
@@ -188,15 +190,20 @@ def user_get(org_id, user_id=None, page=None):
         users_data[doc['user_id']]['network_links'].append(doc['network'])
 
     ip_addrs_iter = server.multi_get_ip_addr(org_id, users_id)
-    for user_id, server_id, addr, addr6 in ip_addrs_iter:
-        server_data = users_servers[user_id].get(server_id)
+    for usr_id, server_id, addr, addr6 in ip_addrs_iter:
+        server_data = users_servers[usr_id].get(server_id)
         if server_data:
             if not server_data['virt_address']:
                 server_data['virt_address'] = addr
             if not server_data['virt_address6']:
                 server_data['virt_address6'] = addr6
 
-    if page is not None:
+    if user_id:
+        resp = users[0]
+        if settings.app.demo_mode:
+            utils.demo_set_cache(resp)
+        return utils.jsonify(resp)
+    elif page is not None:
         resp = {
             'page': page,
             'page_total': org.page_total,
@@ -231,6 +238,7 @@ def _create_user(users, org, user_data, remote_addr, pool):
         'bypass_secondary') else False
     client_to_client = True if user_data.get(
         'client_to_client') else False
+    mac_addresses = user_data.get('mac_addresses') or None
     dns_servers = user_data.get('dns_servers') or None
     dns_suffix = utils.filter_str(user_data.get('dns_suffix')) or None
     port_forwarding_in = user_data.get('port_forwarding')
@@ -239,11 +247,8 @@ def _create_user(users, org, user_data, remote_addr, pool):
     if auth_type not in AUTH_TYPES:
         auth_type = LOCAL_AUTH
 
-    if auth_type == YUBICO_AUTH:
-        yubico_id = user_data.get('yubico_id')
-        yubico_id = yubico_id[:12] if yubico_id else None
-    else:
-        yubico_id = None
+    yubico_id = user_data.get('yubico_id')
+    yubico_id = yubico_id[:12] if yubico_id else None
 
     groups = user_data.get('groups') or []
     for i, group in enumerate(groups):
@@ -288,8 +293,9 @@ def _create_user(users, org, user_data, remote_addr, pool):
     user = org.new_user(type=CERT_CLIENT, pool=pool, name=name,
         email=email, auth_type=auth_type, yubico_id=yubico_id, groups=groups,
         pin=pin, disabled=disabled, bypass_secondary=bypass_secondary,
-        client_to_client=client_to_client, dns_servers=dns_servers,
-        dns_suffix=dns_suffix, port_forwarding=port_forwarding)
+        client_to_client=client_to_client, mac_addresses=mac_addresses,
+        dns_servers=dns_servers, dns_suffix=dns_suffix,
+        port_forwarding=port_forwarding)
     user.audit_event('user_created',
         'User created from web console',
         remote_addr=remote_addr,
@@ -384,6 +390,7 @@ def user_post(org_id):
             }, 429)
 
         thread = threading.Thread(
+            name="CreateUsers",
             target=_create_users,
             args=(org_id, users_data, remote_addr, True),
         )
@@ -455,7 +462,7 @@ def user_put(org_id, user_id):
                 reset_user_cache = True
             user.auth_type = auth_type
 
-    if 'yubico_id' in flask.request.json and user.auth_type == YUBICO_AUTH:
+    if 'yubico_id' in flask.request.json:
         yubico_id = utils.filter_str(flask.request.json['yubico_id']) or None
         yubico_id = yubico_id[:12] if yubico_id else None
         if yubico_id != user.yubico_id:
@@ -535,7 +542,7 @@ def user_put(org_id, user_id):
 
         for network_link in flask.request.json['network_links'] or []:
             try:
-                network_link = str(ipaddress.IPNetwork(network_link))
+                network_link = str(ipaddress.ip_network(network_link))
             except (ipaddress.AddressValueError, ValueError):
                 return _network_link_invalid()
             network_links_new.add(network_link)
@@ -630,6 +637,24 @@ def user_put(org_id, user_id):
                 'error': YUBIKEY_BYPASS_SECONDARY,
                 'error_msg': YUBIKEY_BYPASS_SECONDARY_MSG,
             }, 400)
+
+    if 'mac_addresses' in flask.request.json:
+        mac_addresses = flask.request.json['mac_addresses'] or None
+        if user.mac_addresses != mac_addresses:
+            user.audit_event('user_updated',
+                'User mac addresses changed',
+                remote_addr=remote_addr,
+            )
+
+            journal.entry(
+                journal.USER_UPDATE,
+                user.journal_data,
+                event_long='User mac addresses changed',
+                remote_address=remote_addr,
+            )
+
+            reset_user = True
+        user.mac_addresses = mac_addresses
 
     if 'dns_servers' in flask.request.json:
         dns_servers = flask.request.json['dns_servers'] or None
@@ -769,7 +794,12 @@ def user_otp_secret_put(org_id, user_id):
 
     user.generate_otp_secret()
     user.commit()
+
+    user.clear_auth_cache()
+    user.disconnect()
+
     event.Event(type=USERS_UPDATED, resource_id=org.id)
+
     return utils.jsonify(user.dict())
 
 @app.app.route('/user/<org_id>/<user_id>/audit', methods=['GET'])
@@ -787,3 +817,103 @@ def user_audit_get(org_id, user_id):
     if settings.app.demo_mode:
         utils.demo_set_cache(resp)
     return utils.jsonify(resp)
+
+@app.app.route('/user/<org_id>/<user_id>/device/<device_id>',
+    methods=['PUT'])
+@auth.session_auth
+def user_device_put(org_id, user_id, device_id):
+    if settings.app.demo_mode:
+        return utils.demo_blocked()
+
+    org = organization.get_by_id(org_id)
+    usr = org.get_user(user_id)
+    remote_addr = utils.get_remote_addr()
+    reg_key = flask.request.json.get('reg_key')
+
+    try:
+        usr.device_register(device_id, reg_key)
+
+        journal.entry(
+            journal.USER_DEVICE_REGISTER_SUCCESS,
+            usr.journal_data,
+            device_id=device_id,
+            remote_address=remote_addr,
+            event_long='User device registered',
+        )
+    except DeviceNotFound:
+        return utils.jsonify({
+            'error': DEVICE_NOT_FOUND,
+            'error_msg': DEVICE_NOT_FOUND_MSG,
+        }, 400)
+    except DeviceRegistrationLimit:
+        event.Event(type=USERS_UPDATED, resource_id=org.id)
+        event.Event(type=DEVICES_UPDATED, resource_id=org.id)
+
+        journal.entry(
+            journal.USER_DEVICE_REGISTER_FAILURE,
+            usr.journal_data,
+            device_id=device_id,
+            remote_address=remote_addr,
+            event_long='User device register failed, device limit',
+        )
+
+        return utils.jsonify({
+            'error': DEVICE_REGISTRATION_LIMIT,
+            'error_msg': DEVICE_REGISTRATION_LIMIT_MSG,
+        }, 400)
+    except DeviceRegistrationInvalid:
+        event.Event(type=USERS_UPDATED, resource_id=org.id)
+        event.Event(type=DEVICES_UPDATED, resource_id=org.id)
+
+        journal.entry(
+            journal.USER_DEVICE_REGISTER_FAILURE,
+            usr.journal_data,
+            device_id=device_id,
+            remote_address=remote_addr,
+            event_long='User device register failed, invalid code',
+        )
+
+        return utils.jsonify({
+            'error': DEVICE_REGISTRATION_KEY_INVALID,
+            'error_msg': DEVICE_REGISTRATION_KEY_INVALID_MSG,
+        }, 400)
+
+    event.Event(type=USERS_UPDATED, resource_id=org.id)
+    event.Event(type=DEVICES_UPDATED, resource_id=org.id)
+
+    return utils.jsonify({})
+
+@app.app.route('/user/<org_id>/<user_id>/device/<device_id>',
+    methods=['DELETE'])
+@auth.session_auth
+def user_device_delete(org_id, user_id, device_id):
+    if settings.app.demo_mode:
+        return utils.demo_blocked()
+
+    org = organization.get_by_id(org_id)
+    usr = org.get_user(user_id)
+    remote_addr = utils.get_remote_addr()
+
+    try:
+        usr.device_remove(device_id)
+    except DeviceNotFound:
+        return utils.jsonify({
+            'error': DEVICE_NOT_FOUND,
+            'error_msg': DEVICE_NOT_FOUND_MSG,
+        }, 400)
+
+    journal.entry(
+        journal.USER_DEVICE_DELETE,
+        usr.journal_data,
+        device_id=device_id,
+        remote_address=remote_addr,
+        event_long='User device removed',
+    )
+
+    usr.clear_auth_cache()
+    usr.disconnect()
+
+    event.Event(type=USERS_UPDATED, resource_id=org.id)
+    event.Event(type=DEVICES_UPDATED, resource_id=org.id)
+
+    return utils.jsonify({})

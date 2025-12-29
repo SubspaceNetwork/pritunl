@@ -29,7 +29,7 @@ def _logger_runner_thread():
 
             if msg_docs:
                 yield
-                collection.insert(msg_docs)
+                collection.insert_many(msg_docs)
                 event.Event(type=SYSTEM_LOG_UPDATED)
 
             yield interrupter_sleep(settings.app.log_db_delay)
@@ -41,4 +41,4 @@ def _logger_runner_thread():
             time.sleep(0.5)
 
 def start_logger():
-    threading.Thread(target=_logger_runner_thread).start()
+    threading.Thread(name="LoggerRunner", target=_logger_runner_thread).start()

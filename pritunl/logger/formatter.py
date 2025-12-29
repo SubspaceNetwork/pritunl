@@ -10,7 +10,7 @@ class LogFormatter(logging.Formatter):
         try:
             host_name = settings.local.host.name
         except AttributeError:
-            host_name = 'undefined'
+            host_name = 'local'
         try:
             host_id = settings.local.host_id
         except AttributeError:
@@ -43,7 +43,7 @@ class LogFormatter(logging.Formatter):
 
             if record.data:
                 width = len(max(record.data, key=len))
-                for key, val in record.data.items():
+                for key, val in list(record.data.items()):
                     formatted_record += '\n  %s = %s' % (
                         key.ljust(width),
                         json.dumps(val, default=lambda x: str(x)),
@@ -63,7 +63,7 @@ class LogFormatter(logging.Formatter):
                 if stderr_lines and not stderr_lines[-1]:
                     stderr_lines.pop()
                 for line in stderr_lines:
-                    formatted_record += '\n  ' + line.decode('utf-8')
+                    formatted_record += '\n  ' + line
 
             if traceback:
                 formatted_record += \

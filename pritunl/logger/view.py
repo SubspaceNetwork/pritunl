@@ -26,7 +26,7 @@ class LogView(object):
 
     def get_color(self):
         try:
-            return self.colors.next()
+            return next(self.colors)
         except StopIteration:
             self.colors = (x for x in BASH_COLORS)
             return self.get_color()
@@ -101,7 +101,7 @@ class LogView(object):
 
         if formatted:
             output = ''
-            for i in xrange(len(messages) - 1, -1, -1):
+            for i in range(len(messages) - 1, -1, -1):
                 output += self.format_line(messages[i]) + '\n'
             return output.rstrip('\n')
         else:
@@ -111,7 +111,7 @@ class LogView(object):
     def tail_log_lines(self, formatted=True):
         cursor = self.collection.find().sort(
             '$natural', pymongo.DESCENDING)
-        cursor_count = cursor.count()
+        cursor_count = self.collection.estimated_document_count()
 
         if cursor_count > 127:
             cursor_id = cursor[127]['_id']

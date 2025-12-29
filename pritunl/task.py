@@ -4,6 +4,7 @@ from pritunl import settings
 from pritunl import mongo
 from pritunl import logger
 from pritunl import utils
+from pritunl import database
 
 import pymongo
 import datetime
@@ -29,11 +30,12 @@ class Task(mongo.MongoObject):
         'ttl': settings.mongo.task_ttl,
     }
     type = None
+    delay = None
 
     def __init__(self, run_id=None, **kwargs):
-        mongo.MongoObject.__init__(self, **kwargs)
+        mongo.MongoObject.__init__(self)
         self.type = self.type
-        self.runner_id = utils.ObjectId()
+        self.runner_id = database.ObjectId()
 
     @cached_static_property
     def collection(cls):
@@ -50,7 +52,7 @@ class Task(mongo.MongoObject):
         doc['timestamp'] = utils.now()
 
         try:
-            response = self.collection.update({
+            response = self.collection.update_one({
                 '_id': self.id,
                 '$and': [
                     {'$or': [
@@ -65,8 +67,7 @@ class Task(mongo.MongoObject):
             }, {
                 '$set': doc,
             }, upsert=True)
-            claimed = bool(response.get('updatedExisting') or response.get(
-                'upserted'))
+            claimed = bool(response.modified_count or response.upserted_id)
         except pymongo.errors.DuplicateKeyError:
             claimed = False
 
@@ -89,7 +90,7 @@ class Task(mongo.MongoObject):
             )
 
     def complete(self):
-        self.collection.update({
+        self.collection.update_one({
             '_id': self.id,
             '$or': [
                 {'runner_id': self.runner_id},

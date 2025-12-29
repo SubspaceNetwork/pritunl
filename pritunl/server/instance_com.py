@@ -9,6 +9,8 @@ from pritunl import mongo
 from pritunl import clients
 from pritunl import ipaddress
 from pritunl import monitoring
+from pritunl import database
+from pritunl import plugins
 
 import os
 import time
@@ -32,6 +34,7 @@ class ServerInstanceCom(object):
         self.client = None
         self.clients = clients.Clients(svr, instance, self)
         self.client_bytes = {}
+        self.client_bytes_period = {}
         self.cur_timestamp = utils.now()
         self.bandwidth_rate = settings.vpn.bandwidth_update_rate
 
@@ -42,12 +45,13 @@ class ServerInstanceCom(object):
     def sock_send(self, data):
         self.sock_lock.acquire()
         try:
-            self.sock.send(data)
+            self.sock.send(data.encode())
         finally:
             self.sock_lock.release()
 
-    def client_kill(self, client_id):
+    def client_kill(self, client_id, reason=""):
         self.clients.disconnected(client_id)
+        self.push_output('client-kill "%s"' % reason)
         self.sock_send('client-kill %s\n' % client_id)
 
     def send_client_auth(self, client_id, key_id, client_conf):
@@ -63,16 +67,25 @@ class ServerInstanceCom(object):
         self.server.output.push_message(message)
 
     def parse_bytecount(self, client_id, bytes_recv, bytes_sent):
-        _, bytes_recv_prev, bytes_sent_prev = self.client_bytes.get(
-            client_id, (None, 0, 0))
-
-        self.client_bytes[client_id] = (
-            self.cur_timestamp, bytes_recv, bytes_sent)
-
         self.bytes_lock.acquire()
-        self.bytes_recv += bytes_recv - bytes_recv_prev
-        self.bytes_sent += bytes_sent - bytes_sent_prev
-        self.bytes_lock.release()
+        try:
+            _, bytes_recv_prev, bytes_sent_prev = self.client_bytes.get(
+                client_id, (None, 0, 0))
+
+            cur_bytes_recv, cur_bytes_sent = self.client_bytes_period.get(
+                client_id, (0, 0))
+
+            self.client_bytes[client_id] = (
+                self.cur_timestamp, bytes_recv, bytes_sent)
+            self.client_bytes_period[client_id] = (
+                cur_bytes_recv + (bytes_recv - bytes_recv_prev),
+                cur_bytes_sent + (bytes_sent - bytes_sent_prev),
+            )
+
+            self.bytes_recv += bytes_recv - bytes_recv_prev
+            self.bytes_sent += bytes_sent - bytes_sent_prev
+        finally:
+            self.bytes_lock.release()
 
     def parse_line(self, line):
         if self.client:
@@ -107,14 +120,14 @@ class ServerInstanceCom(object):
                         org_id = tls_env[2:cn_index]
                         user_id = tls_env[cn_index + 3:]
 
-                    self.client['org_id'] = utils.ObjectId(org_id)
-                    self.client['user_id'] = utils.ObjectId(user_id)
+                    self.client['org_id'] = database.ParseObjectId(org_id)
+                    self.client['user_id'] = database.ParseObjectId(user_id)
                 elif env_key == 'IV_HWADDR':
-                    self.client['mac_addr'] = env_val
+                    self.client['mac_addr'] = utils.filter_str(env_val)
                 elif env_key == 'untrusted_ip':
-                    self.client['remote_ip'] = env_val
+                    self.client['remote_ip'] = utils.filter_str(env_val)
                 elif env_key == 'untrusted_ip6':
-                    remote_ip = env_val
+                    remote_ip = utils.filter_str(env_val)
                     if remote_ip.startswith('::ffff:'):
                         remote_ip = remote_ip.split(':')[-1]
                     self.client['remote_ip'] = remote_ip
@@ -123,15 +136,19 @@ class ServerInstanceCom(object):
                         env_val = 'chrome'
                         self.client['device_id'] = uuid.uuid4().hex
                         self.client['device_name'] = 'chrome-os'
-                    self.client['platform'] = env_val
+                    self.client['platform'] = utils.filter_str(env_val)
+                elif env_key == 'IV_VER':
+                    self.client['ovpn_ver'] = utils.filter_str(env_val)
                 elif env_key == 'UV_ID':
-                    self.client['device_id'] = env_val
+                    self.client['device_id'] = utils.filter_str(env_val)
                 elif env_key == 'UV_NAME':
-                    self.client['device_name'] = env_val
+                    self.client['device_name'] = utils.filter_str(env_val)
                 elif env_key == 'UV_PLATFORM':
-                    self.client['platform'] = env_val
+                    self.client['platform'] = utils.filter_str(env_val)
+                elif env_key == 'UV_PRITUNL_VER':
+                    self.client['client_ver'] = utils.filter_str(env_val)
                 elif env_key == 'username':
-                    self.client['username'] = env_val
+                    self.client['username'] = utils.filter_str(env_val)[:128]
                 elif env_key == 'password':
                     self.client['password'] = env_val
             else:
@@ -170,7 +187,7 @@ class ServerInstanceCom(object):
             self.push_output('COM> %s' % line)
 
     def wait_for_socket(self):
-        for _ in xrange(10000):
+        for _ in range(10000):
             if os.path.exists(self.socket_path):
                 return
             time.sleep(0.001)
@@ -213,17 +230,28 @@ class ServerInstanceCom(object):
             if len(msg) > 3:
                 server_id = msg[3]
             self.clients.reconnect_user(user_id, host_id, server_id)
-        elif event_type == 'route_advertisement':
+        elif event_type == 'route_advertisement2':
             server_id = msg[1]
             vpc_region = msg[2]
             vpc_id = msg[3]
-            network = msg[4]
+            networks = msg[4]
 
             if server_id != self.server.id:
                 return
 
             self.instance.reserve_route_advertisement(
-                vpc_region, vpc_id, network)
+                vpc_region, vpc_id, networks)
+        elif event_type == 'route_advertised':
+            server_id = msg[1]
+            vxlan_addr = msg[2]
+            vxlan_addr6 = msg[3]
+            networks = msg[4]
+
+            if server_id != self.server.id:
+                return
+
+            for network in networks:
+                self.instance.tables_add(vxlan_addr, vxlan_addr6, network)
 
     @interrupter
     def _watch_thread(self):
@@ -233,9 +261,53 @@ class ServerInstanceCom(object):
                 timestamp_ttl = self.cur_timestamp - datetime.timedelta(
                     seconds=180)
 
-                for client_id, (timestamp, _, _) in self.client_bytes.items():
+                for client_id, (timestamp, _, _) in list(
+                        self.client_bytes.items()):
                     if timestamp < timestamp_ttl:
                         self.client_bytes.pop(client_id, None)
+                        self.client_bytes_period.pop(client_id, None)
+                    else:
+                        self.bytes_lock.acquire()
+                        bytes_sent, bytes_recv = self.client_bytes_period.get(
+                            client_id, (0, 0))
+                        self.client_bytes_period[client_id] = (0, 0)
+                        self.bytes_lock.release()
+
+                        client = self.clients.get_client(client_id)
+                        if client:
+                            monitoring.insert_point('user_bandwidth', {
+                                'org_id': client.get('org_id'),
+                                'org_name': client.get('org_name'),
+                                'user_id': client.get('user_id'),
+                                'user_name': client.get('user_name'),
+                                'device_id': utils.filter_str2(
+                                    client.get('device_id')),
+                                'device_name': utils.filter_str2(
+                                    client.get('device_name')),
+                            }, {
+                                'bytes_sent': bytes_sent,
+                                'bytes_recv': bytes_recv,
+                            })
+
+                            plugins.event(
+                                'user_bandwidth',
+                                host_id=settings.local.host.id,
+                                host_name=settings.local.host.name,
+                                server_id=self.server.id,
+                                server_name=self.server.name,
+                                org_id=client.get('org_id'),
+                                org_name=client.get('org_name'),
+                                user_id=client.get('user_id'),
+                                user_name=client.get('user_name'),
+                                device_id=client.get('device_id'),
+                                device_name=client.get('device_name'),
+                                remote_ip=client.get('real_address'),
+                                virtual_ip=client.get('virt_address'),
+                                virtual_ip6=client.get('virt_address6'),
+                                timestamp=self.cur_timestamp,
+                                bytes_sent=bytes_sent,
+                                bytes_recv=bytes_recv,
+                            )
 
                 self.bytes_lock.acquire()
                 bytes_recv = self.bytes_recv
@@ -289,7 +361,7 @@ class ServerInstanceCom(object):
 
             data = ''
             while True:
-                data += self.sock.recv(SOCKET_BUFFER)
+                data += self.sock.recv(SOCKET_BUFFER).decode()
                 if not data or self.instance.sock_interrupt:
                     if not self.instance.sock_interrupt and \
                             not check_global_interrupt():
@@ -322,6 +394,7 @@ class ServerInstanceCom(object):
                     instance_id=self.instance.id,
                     socket_path=self.socket_path,
                 )
+            time.sleep(0.3)
             self.instance.stop_process()
         finally:
             remove_listener(self.instance.id)
@@ -345,7 +418,7 @@ class ServerInstanceCom(object):
                         'user_id': user.id,
                         'mac_addr': utils.rand_str(16),
                         'remote_ip': str(
-                            ipaddress.IPAddress(100000000 + random.randint(
+                            ipaddress.ip_address(100000000 + random.randint(
                                 0, 1000000000))),
                         'platform': 'linux',
                         'device_id': str(bson.ObjectId()),
@@ -370,21 +443,24 @@ class ServerInstanceCom(object):
         self.sock.connect(self.socket_path)
 
     def start(self):
-        thread = threading.Thread(target=self._socket_thread)
+        thread = threading.Thread(name="ServerSocket",
+            target=self._socket_thread)
         thread.daemon = True
         thread.start()
 
-        thread = threading.Thread(target=self._watch_thread)
+        thread = threading.Thread(name="ServerWatch",
+            target=self._watch_thread)
         thread.daemon = True
         thread.start()
 
-        thread = threading.Thread(target=self.clients.ping_thread)
+        thread = threading.Thread(name="ServerPing",
+            target=self.clients.ping_thread)
+        thread.daemon = True
+        thread.start()
+
+        thread = threading.Thread(name="ServerAuth",
+            target=self.clients.auth_thread)
         thread.daemon = True
         thread.start()
 
         self.clients.start()
-
-        if settings.vpn.stress_test:
-            thread = threading.Thread(target=self._stress_thread)
-            thread.daemon = True
-            thread.start()

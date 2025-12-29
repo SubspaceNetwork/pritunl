@@ -59,18 +59,18 @@ class QueueDhParams(queue.Queue):
                 self.server_id = self.reserve_data['server_id']
 
         if self.server_id:
-            response = self.server_collection.update({
+            response = self.server_collection.update_one({
                 '_id': self.server_id,
                 'dh_param_bits': self.dh_param_bits,
             }, {'$set': {
                 'dh_params': self.dh_params,
             }})
 
-            if response['updatedExisting']:
+            if bool(response.modified_count):
                 event.Event(type=SERVERS_UPDATED)
                 return
 
-        self.dh_params_collection.insert({
+        self.dh_params_collection.insert_one({
             'dh_param_bits': self.dh_param_bits,
             'dh_params': self.dh_params,
         })
@@ -98,16 +98,18 @@ class QueueDhParams(queue.Queue):
 
 @queue.add_reserve('pooled_dh_params')
 def reserve_pooled_dh_params(svr):
-    doc = QueueDhParams.dh_params_collection.find_and_modify({
+    doc = QueueDhParams.dh_params_collection.find_one_and_update({
         'dh_param_bits': svr.dh_param_bits,
     }, {'$set': {
         'dh_param_bits': None,
-    }}, new=True)
+    }}, return_document=True)
 
     if not doc:
         return False
 
-    QueueDhParams.dh_params_collection.remove(doc['_id'])
+    QueueDhParams.dh_params_collection.delete_one({
+        "_id": doc['_id'],
+    })
 
     svr.dh_params = doc['dh_params']
     return True

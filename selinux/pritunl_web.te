@@ -5,20 +5,26 @@ require {
   type pritunl_tmp_t;
   type pritunl_var_log_t;
 
+  type init_t;
   type http_port_t;
   type net_conf_t;
   type node_t;
   type proc_net_t;
   type sysctl_net_t;
   type unreserved_port_t;
+  type sysfs_t;
 }
+
+type pritunl_web_unit_file_t;
+systemd_unit_file(pritunl_web_unit_file_t)
 
 type pritunl_web_t;
 type pritunl_web_exec_t;
-domain_type(pritunl_web_t)
-domain_entry_file(pritunl_web_t, pritunl_web_exec_t)
-init_daemon_domain(pritunl_web_t, pritunl_web_exec_t)
 
+init_daemon_domain(pritunl_web_t, pritunl_web_exec_t)
+inetd_service_domain(pritunl_web_t, pritunl_web_exec_t)
+
+type_transition init_t pritunl_web_exec_t:process pritunl_web_t;
 type_transition pritunl_t pritunl_web_exec_t:process pritunl_web_t;
 
 allow pritunl_web_t pritunl_t:fifo_file { read write ioctl };
@@ -44,3 +50,4 @@ allow pritunl_web_t self:unix_dgram_socket { create ioctl };
 allow pritunl_web_t sysctl_net_t:dir search;
 allow pritunl_web_t sysctl_net_t:file { open read };
 allow pritunl_web_t unreserved_port_t:tcp_socket name_connect;
+allow pritunl_web_t sysfs_t:file read;

@@ -1,26 +1,28 @@
+from pritunl.constants import *
 from pritunl import settings
 from pritunl import logger
 
-import urllib
-import httplib
+import urllib.request, urllib.parse, urllib.error
+import http.client
 import time
-import urlparse
+import urllib.parse
 import requests
 
 def _getokta_url():
-    parsed = urlparse.urlparse(settings.app.sso_saml_url)
+    parsed = urllib.parse.urlparse(settings.app.sso_saml_url)
     return '%s://%s' % (parsed.scheme, parsed.netloc)
 
 def get_user_id(username):
     try:
         response = requests.get(
-            _getokta_url() + '/api/v1/users/%s' % urllib.quote(username),
+            _getokta_url() + '/api/v1/users/%s' % urllib.parse.quote(username),
             headers={
                 'Accept': 'application/json',
+                'User-Agent': USER_AGENT,
                 'Authorization': 'SSWS %s' % settings.app.sso_okta_token,
             },
         )
-    except httplib.HTTPException:
+    except http.client.HTTPException:
         logger.exception('Okta api error', 'sso',
             username=username,
         )
@@ -68,10 +70,11 @@ def auth_okta(username):
             '/api/v1/apps/%s/users/%s' % (okta_app_id, user_id),
             headers={
                 'Accept': 'application/json',
+                'User-Agent': USER_AGENT,
                 'Authorization': 'SSWS %s' % settings.app.sso_okta_token,
             },
         )
-    except httplib.HTTPException:
+    except http.client.HTTPException:
         logger.exception('Okta api error', 'sso',
             username=username,
             okta_app_id=okta_app_id,
@@ -108,7 +111,23 @@ def auth_okta(username):
 
     return False
 
-def auth_okta_secondary(username, passcode, remote_ip, okta_mode):
+def auth_okta_secondary(username, passcode, remote_ip, okta_mode, platform):
+    ua_platform = ''
+    if platform == 'linux':
+        ua_platform = 'Linux; '
+    elif platform == 'mac':
+        ua_platform = 'Macintosh; '
+    elif platform == 'ios':
+        ua_platform = 'Macintosh; '
+    elif platform == 'android':
+        ua_platform = 'Android; '
+    elif platform == 'win':
+        ua_platform = 'Windows; '
+    elif platform == 'chrome':
+        ua_platform = 'Android; '
+
+    useragent = 'Mozilla/5.0 (%sPython 3.9) Pritunl/1.32' % ua_platform
+
     user_id = get_user_id(username)
     if not user_id:
         return False
@@ -125,10 +144,11 @@ def auth_okta_secondary(username, passcode, remote_ip, okta_mode):
             _getokta_url() + '/api/v1/users/%s/factors' % user_id,
             headers={
                 'Accept': 'application/json',
+                'User-Agent': USER_AGENT,
                 'Authorization': 'SSWS %s' % settings.app.sso_okta_token,
             },
         )
-    except httplib.HTTPException:
+    except http.client.HTTPException:
         logger.exception('Okta api error', 'sso',
             username=username,
             okta_user_id=user_id,
@@ -204,13 +224,14 @@ def auth_okta_secondary(username, passcode, remote_ip, okta_mode):
                 user_id, factor_id),
             headers={
                 'Accept': 'application/json',
+                'User-Agent': useragent,
                 'Content-Type': 'application/json',
                 'Authorization': 'SSWS %s' % settings.app.sso_okta_token,
                 'X-Forwarded-For': remote_ip,
             },
             json=verify_data,
         )
-    except httplib.HTTPException:
+    except http.client.HTTPException:
         logger.exception('Okta api error', 'sso',
             username=username,
             user_id=user_id,
@@ -286,10 +307,11 @@ def auth_okta_secondary(username, passcode, remote_ip, okta_mode):
                 poll_url,
                 headers={
                     'Accept': 'application/json',
+                    'User-Agent': useragent,
                     'Authorization': 'SSWS %s' % settings.app.sso_okta_token,
                 },
             )
-        except httplib.HTTPException:
+        except http.client.HTTPException:
             logger.exception('Okta poll api error', 'sso',
                 username=username,
                 user_id=user_id,

@@ -14,23 +14,24 @@ def random_sleep():
 
 def run_task(tsk):
     random_sleep()
-    thread = threading.Thread(target=tsk.run)
+    thread = threading.Thread(name="Task-" + tsk.type, target=tsk.run)
     thread.daemon = True
     thread.start()
 
 def print_tasks():
     for hour in task.tasks:
-        print 'hour:', hour
+        print('hour:', hour)
         for minute in task.tasks[hour]:
-            print '    minute:', minute
+            print('    minute:', minute)
             for second in task.tasks[hour][minute]:
-                print '        second:', second
+                print('        second:', second)
                 for tsk in task.tasks[hour][minute][second]:
-                    print '            task:', tsk
+                    print('            task:', tsk)
 
 @interrupter
 def run_thread():
     last_run = None
+    start_time = time.time()
 
     try:
         for task_cls in task.tasks_on_start:
@@ -52,7 +53,12 @@ def run_thread():
                                 run_id = '%s_%s_%s_%s' % (task_cls.type,
                                     cur_time.hour, cur_time.minute,
                                     cur_time.second)
-                                run_task(task_cls(id=run_id, upsert=True))
+                                tsk = task_cls(id=run_id, upsert=True)
+                                if tsk.delay:
+                                    if time.time() - start_time > tsk.delay:
+                                        run_task(tsk)
+                                else:
+                                    run_task(tsk)
         except:
             logger.exception('Error in tasks run thread', 'runners')
 
@@ -72,14 +78,14 @@ def check_thread():
             for task_item in task.iter_tasks(spec):
                 random_sleep()
 
-                response = task.Task.collection.update({
+                response = task.Task.collection.update_one({
                     '_id': task_item.id,
                     'state': {'$ne': COMPLETE},
                     'ttl_timestamp': {'$lt': cur_timestamp},
                 }, {'$unset': {
                     'runner_id': '',
                 }})
-                if response['updatedExisting']:
+                if bool(response.modified_count):
                     run_task(task_item)
         except:
             logger.exception('Error in task check thread', 'runners')
@@ -89,5 +95,5 @@ def check_thread():
 def start_task():
     from pritunl import tasks
 
-    for target in (run_thread, check_thread):
-        threading.Thread(target=target).start()
+    threading.Thread(name="TaskRunner", target=run_thread).start()
+    threading.Thread(name="TaskCheck", target=check_thread).start()

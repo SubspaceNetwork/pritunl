@@ -15,8 +15,6 @@ define([
     hasAdvanced: true,
     events: function() {
       return _.extend({
-        'click .auth-type select': 'onAuthType',
-        'change .auth-type select': 'onAuthType',
         'click .bypass-secondary-toggle': 'onBypassSecondarySelect',
         'click .client-to-client-toggle': 'onClientToClientSelect'
       }, ModalRenameUserView.__super__.events);
@@ -106,15 +104,6 @@ define([
     onClientToClientSelect: function() {
       this.setClientToClientSelect(!this.getClientToClientSelect());
     },
-    onAuthType: function() {
-      var authType = this.$('.auth-type select').val();
-
-      if (authType === 'yubico') {
-        this.$('.yubikey-id').slideDown(window.slideTime);
-      } else {
-        this.$('.yubikey-id').slideUp(window.slideTime);
-      }
-    },
     getGroups: function() {
       var groups = [];
       var groupsData = this.$('.groups input').select2('data');
@@ -160,6 +149,16 @@ define([
         }
       }
 
+      var macAddr;
+      var macAddrs = [];
+      var macAddrsTemp = this.$('.mac-addresses input').val().split(',');
+      for (i = 0; i < macAddrsTemp.length; i++) {
+        macAddr = $.trim(macAddrsTemp[i]);
+        if (macAddr) {
+          macAddrs.push(macAddr);
+        }
+      }
+
       var dnsServer;
       var dnsServers = [];
       var dnsServersTemp = this.$('.dns-servers input').val().split(',');
@@ -192,6 +191,7 @@ define([
         network_links: networkLinks,
         bypass_secondary: bypassSecondary,
         client_to_client: clientToClient,
+        mac_addresses: macAddrs,
         dns_servers: dnsServers,
         dns_suffix: dnsSuffix,
         port_forwarding: portForwarding,

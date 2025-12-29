@@ -33,16 +33,15 @@ Commands:
 INIT_PATH = 'pritunl/__init__.py'
 SETUP_PATH = 'setup.py'
 CHANGES_PATH = 'CHANGES'
-BUILD_KEYS_PATH = 'tools/build_keys.json'
+BUILD_KEYS_PATH = os.path.expanduser('~/data/build/pritunl_build.json')
 STABLE_PACUR_PATH = '../pritunl-pacur'
 TEST_PACUR_PATH = '../pritunl-pacur-test'
 BUILD_TARGETS = ('pritunl',)
 WWW_DIR = 'www'
 STYLES_DIR = 'www/styles'
-RELEASES_DIR = 'www/styles/releases'
 
 os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
-cur_date = datetime.datetime.utcnow()
+cur_date = datetime.datetime.now(datetime.timezone.utc)
 pacur_path = None
 
 def wget(url, cwd=None, output=None):
@@ -58,7 +57,6 @@ def post_git_asset(release_id, file_name, file_path):
         response = requests.post(
             'https://uploads.github.com/repos/%s/%s/releases/%s/assets' % (
                 github_owner, pkg_name, release_id),
-            verify=False,
             headers={
                 'Authorization': 'token %s' % github_token,
                 'Content-Type': 'application/octet-stream',
@@ -83,7 +81,8 @@ def post_git_asset(release_id, file_name, file_path):
         sys.exit(1)
 
 def get_ver(version):
-    day_num = (cur_date - datetime.datetime(2013, 9, 12)).days
+    day_num = (cur_date - datetime.datetime(2013, 9, 12,
+        tzinfo=datetime.timezone.utc)).days
     min_num = int(math.floor(((cur_date.hour * 60) + cur_date.minute) / 14.4))
     ver = re.findall(r'\d+', version)
     ver_str = '.'.join((ver[0], ver[1], str(day_num), str(min_num)))
@@ -111,7 +110,9 @@ def iter_packages():
     for target in BUILD_TARGETS:
         target_path = os.path.join(pacur_path, target)
         for name in os.listdir(target_path):
-            if name.endswith(".pkg.tar.xz"):
+            if cur_version not in name:
+                continue
+            elif name.endswith(".pkg.tar.zst"):
                 pass
             elif name.endswith(".rpm"):
                 pass
@@ -124,55 +125,22 @@ def iter_packages():
 
             yield name, path
 
-def generate_last_modifited_etag(file_path):
-    import werkzeug.http
-    file_name = os.path.basename(file_path).encode(
-        sys.getfilesystemencoding())
-    file_mtime = datetime.datetime.utcfromtimestamp(
-        os.path.getmtime(file_path))
-    file_size = int(os.path.getsize(file_path))
-    last_modified = werkzeug.http.http_date(file_mtime)
-
-    return (last_modified, 'wzsdm-%d-%s-%s' % (
-        time.mktime(file_mtime.timetuple()),
-        file_size,
-        zlib.adler32(file_name) & 0xffffffff,
-    ))
-
-def sync_db():
-    import pymongo
-
-    releases_dbs = []
-    for mongodb_uri in mongodb_uris:
-        mongo_client = pymongo.MongoClient(mongodb_uri)
-        mongo_db = mongo_client.get_default_database()
-        releases_dbs.append(mongo_db.releases)
-
-    for releases_db in releases_dbs:
-        for file_name in os.listdir(RELEASES_DIR):
-            file_path = os.path.join(RELEASES_DIR, file_name)
-            ver, file_type, _ = file_name.split('.')
-            if file_type == 'release':
-                with open(file_path, 'r') as release_file:
-                    doc = json.loads(release_file.read().strip())
-                    releases_db.update_one({
-                        '_id': ver,
-                    }, {
-                        '$set': doc,
-                    }, upsert=True)
-            else:
-                last_modified, etag = generate_last_modifited_etag(file_path)
-                with open(file_path, 'r') as css_file:
-                    releases_db.update_one({
-                        '_id': ver,
-                    }, {'$set': {
-                        file_type: {
-                            'etag': etag,
-                            'last_modified': last_modified,
-                            'data': css_file.read(),
-                        },
-                    }}, upsert=True)
-
+def sync_styles():
+    subprocess.check_call(['git', 'reset', 'HEAD', '.'], cwd='www/styles')
+    subprocess.check_call(['git', 'add', '.'], cwd='www/styles')
+    changes = subprocess.check_output(
+        ['git', 'status', '-s'],
+        cwd='www/styles',
+    ).decode().rstrip().split('\n')
+    changed = any([True if (len(x) > 0 and x[0] == 'A') else
+        False for x in changes])
+    if changed:
+        subprocess.check_call(
+            ['git', 'commit', '-S', '-m'
+           'Update styles ' + cur_date.strftime("%Y%m%d_%H%M")],
+            cwd='www/styles',
+        )
+        subprocess.check_call(['git', 'push'], cwd='www/styles')
 
 if len(sys.argv) > 1:
     cmd = sys.argv[1]
@@ -181,58 +149,61 @@ else:
 
 def aes_encrypt(passphrase, data):
     enc_salt = os.urandom(32)
-    enc_iv = os.urandom(16)
+    enc_iv = os.urandom(12)
 
     kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA1(),
+        algorithm=hashes.SHA512(),
         length=32,
         salt=enc_salt,
-        iterations=1000,
+        iterations=10000000,
         backend=default_backend(),
     )
     enc_key = kdf.derive(passphrase.encode())
 
-    data += '\x00' * (16 - (len(data) % 16))
-
     cipher = Cipher(
         algorithms.AES(enc_key),
-        modes.CBC(enc_iv),
+        modes.GCM(enc_iv),
         backend=default_backend()
     ).encryptor()
-    enc_data = cipher.update(data.encode()) + cipher.finalize()
+
+    enc_data = cipher.update(data.encode('utf-8')) + cipher.finalize()
+    auth_tag = cipher.tag
 
     return '\n'.join([
         base64.b64encode(enc_salt).decode('utf-8'),
         base64.b64encode(enc_iv).decode('utf-8'),
         base64.b64encode(enc_data).decode('utf-8'),
+        base64.b64encode(auth_tag).decode('utf-8'),
     ])
 
 def aes_decrypt(passphrase, data):
     data = data.split('\n')
-    if len(data) < 3:
+    if len(data) < 4:
         raise ValueError('Invalid encryption data')
 
     enc_salt = base64.b64decode(data[0])
     enc_iv = base64.b64decode(data[1])
     enc_data = base64.b64decode(data[2])
+    auth_tag = base64.b64decode(data[3])
 
     kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA1(),
+        algorithm=hashes.SHA512(),
         length=32,
         salt=enc_salt,
-        iterations=1000,
+        iterations=10000000,
         backend=default_backend(),
     )
     enc_key = kdf.derive(passphrase.encode())
 
     cipher = Cipher(
         algorithms.AES(enc_key),
-        modes.CBC(enc_iv),
+        modes.GCM(enc_iv, auth_tag),
         backend=default_backend()
     ).decryptor()
-    data = cipher.update(enc_data) + cipher.finalize()
 
-    return data.decode('utf-8').replace('\x00', '')
+    decrypted_data = cipher.update(enc_data) + cipher.finalize()
+
+    return decrypted_data.decode('utf-8')
 
 passphrase = getpass.getpass('Enter passphrase: ')
 
@@ -273,9 +244,6 @@ with open(BUILD_KEYS_PATH, 'r') as build_keys_file:
     github_token = build_keys['github_token']
     gitlab_token = build_keys['gitlab_token']
     gitlab_host = build_keys['gitlab_host']
-    mirror_url = build_keys['mirror_url']
-    test_mirror_url = build_keys['test_mirror_url']
-    mongodb_uris = build_keys['mongodb_uris']
 
 # Get package info
 with open(INIT_PATH, 'r') as init_file:
@@ -309,8 +277,8 @@ if cmd == 'version':
     sys.exit(0)
 
 
-if cmd == 'sync-db':
-    sync_db()
+if cmd == 'sync-styles':
+    sync_styles()
 
 
 if cmd == 'sync-releases':
@@ -467,10 +435,8 @@ if cmd == 'set-version':
         subprocess.check_call(['git', 'commit', '-S', '-m', 'Rebuild dist'])
         subprocess.check_call(['git', 'push'])
 
-
-    # Sync db
-    sync_db()
-
+    # Sync styles
+    sync_styles()
 
     # Generate changelog
     version = None
@@ -541,6 +507,11 @@ if cmd == 'set-version':
         subprocess.check_call(['git', 'push', '-u', 'origin', new_version])
     time.sleep(6)
 
+    # Create tag
+    subprocess.check_call(['git', 'tag', new_version])
+    subprocess.check_call(['git', 'push', '--tags'])
+    time.sleep(1)
+
 
     # Create release
     response = requests.post(
@@ -572,14 +543,15 @@ if cmd == 'set-version':
     # Create gitlab release
     response = requests.post(
         ('https://%s/api/v4/projects' +
-            '/%s%%2F%s/repository/tags/%s/release') % (
-            gitlab_host, github_owner, pkg_name, new_version),
+            '/%s%%2F%s/releases') % (
+            gitlab_host, github_owner, pkg_name),
         headers={
             'Private-Token': gitlab_token,
             'Content-type': 'application/json',
         },
         data=json.dumps({
             'tag_name': new_version,
+            'name': '%s v%s' % (pkg_name, new_version),
             'description': release_body,
         }),
     )
@@ -605,7 +577,7 @@ if cmd == 'build' or cmd == 'build-upload':
     archive_path = os.path.join(os.path.sep, 'tmp', archive_name)
     if os.path.isfile(archive_path):
         os.remove(archive_path)
-    wget('https://github.com/%s/%s/archive/%s' % (
+    wget('https://github.com/%s/%s/archive/refs/tags/%s' % (
         github_owner, pkg_name, archive_name),
         output=archive_name,
         cwd=os.path.join(os.path.sep, 'tmp'),
@@ -629,6 +601,7 @@ if cmd == 'build' or cmd == 'build-upload':
                 '"[a-f0-9]{64}"',
                 '"%s"' % archive_sha256_sum.decode('utf-8'),
                 pkgbuild_data,
+                count=1,
             )
 
         with open(pkgbuild_path, 'w') as pkgbuild_file:
@@ -679,21 +652,15 @@ if cmd == 'upload' or cmd == 'build-upload':
         cwd=pacur_path,
     )
 
-
-    # Sync mirror
-    subprocess.check_call([
-        'mc',
-        'mirror',
-        '--remove',
-        '--overwrite',
-        'mirror',
-        'repo/dev' if is_snapshot else 'repo/stable',
-    ], cwd=pacur_path)
-
     # Add to github
     for name, path in iter_packages():
         post_git_asset(release_id, name, path)
 
+    # Sync mirror
+    subprocess.check_call([
+        'sh',
+        'upload-unstable.sh',
+    ], cwd=pacur_path)
 
 if cmd == 'upload-github':
     if len(args) > 1:

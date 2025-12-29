@@ -15,7 +15,6 @@ class Host(mongo.MongoObject):
         'hostname',
         'ping_timestamp',
         'instance_id',
-        'auto_instance_id',
         'status',
         'start_timestamp',
         'version',
@@ -26,6 +25,7 @@ class Host(mongo.MongoObject):
         'auto_public_host',
         'auto_public_host6',
         'routed_subnet6',
+        'routed_subnet6_wg',
         'proxy_ndp',
         'link_address',
         'sync_address',
@@ -35,6 +35,7 @@ class Host(mongo.MongoObject):
         'auto_local_address6',
         'local_networks',
         'availability_group',
+        'priority',
     }
     fields_default = {
         'status': OFFLINE,
@@ -42,10 +43,10 @@ class Host(mongo.MongoObject):
     }
 
     def __init__(self, name=None, **kwargs):
-        mongo.MongoObject.__init__(self, **kwargs)
+        mongo.MongoObject.__init__(self)
         self.user_count = None
         self.users_online = None
-        self.usage = HostUsage(self.id)
+        self._usage = None
 
         if name is not None:
             self.name = name
@@ -60,6 +61,14 @@ class Host(mongo.MongoObject):
     @cached_static_property
     def user_collection(cls):
         return mongo.get_collection('users')
+
+    @property
+    def usage(self):
+        if not self._usage:
+            self._usage = HostUsage(self.id)
+        elif self._usage.host_id != self.id:
+            self._usage = HostUsage(self.id)
+        return self._usage
 
     @property
     def uptime(self):
@@ -123,6 +132,7 @@ class Host(mongo.MongoObject):
             'public_addr6': self.public_addr6,
             'public_address6': self.public_address6,
             'routed_subnet6': self.routed_subnet6,
+            'routed_subnet6_wg': self.routed_subnet6_wg,
             'proxy_ndp': self.proxy_ndp,
             'link_addr': self.link_addr,
             'link_address': self.link_address,
@@ -132,6 +142,7 @@ class Host(mongo.MongoObject):
             'local_address6': self.local_address6,
             'local_addr6': self.local_addr6,
             'availability_group': self.availability_group,
+            'priority': self.priority,
         }
 
     def iter_servers(self, fields=None):
@@ -177,7 +188,7 @@ class Host(mongo.MongoObject):
         raise ValueError('No orgs exists in link server')
 
     def remove_link_user(self):
-        self.user_collection.remove({
+        self.user_collection.delete_one({
             'resource_id': self.id,
         })
 
@@ -195,7 +206,7 @@ class Host(mongo.MongoObject):
         if send_event:
             event.Event(type=SERVERS_UPDATED)
 
-        self.user_collection.remove({
+        self.user_collection.delete_one({
             'resource_id': self.id,
         })
         mongo.MongoObject.remove(self)

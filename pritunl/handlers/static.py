@@ -58,13 +58,6 @@ def logo_static_get():
         'logo.png', cache=True)
     return static_file.get_response()
 
-@app.app.route('/robots.txt', methods=['GET'])
-@auth.open_auth
-def robots_static_get():
-    static_file = static.StaticFile(settings.conf.www_path,
-        'robots.txt', cache=True)
-    return static_file.get_response()
-
 @app.app.route('/', methods=['GET'])
 @auth.open_auth
 def index_static_get():
@@ -104,6 +97,8 @@ def login_static_get():
                 body_class += 'sso-okta '
             elif SAML_ONELOGIN_AUTH in settings.app.sso:
                 body_class += 'sso-onelogin '
+            elif SAML_JUMPCLOUD_AUTH in settings.app.sso:
+                body_class += 'sso-jumpcloud '
             elif AZURE_AUTH in settings.app.sso:
                 body_class += 'sso-azure '
             elif GOOGLE_AUTH in settings.app.sso:
@@ -125,6 +120,18 @@ def login_static_get():
 
     static_file.data = static_file.data.replace(
         '<body>', '<body class="' + body_class + '">')
+
+    return static_file.get_response()
+
+@app.app.route('/success', methods=['GET'])
+@auth.open_auth
+def success_get():
+    static_file = static.StaticFile(settings.conf.www_path,
+        'success.html', cache=False, gzip=False)
+
+    if settings.app.theme == 'dark':
+        static_file.data = static_file.data.replace(
+            '<body>', '<body class="dark">')
 
     return static_file.get_response()
 
